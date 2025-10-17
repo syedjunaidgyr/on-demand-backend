@@ -1,0 +1,256 @@
+const Joi = require('joi');
+
+// Validation schemas
+const schemas = {
+  // User validation
+  userRegistration: Joi.object({
+    email: Joi.string().email().required(),
+    password: Joi.string().min(6).required(),
+    firstName: Joi.string().min(2).max(100).required(),
+    lastName: Joi.string().min(2).max(100).required(),
+    phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
+    role: Joi.string().valid('HR', 'DOCTOR', 'NURSE', 'ADMIN').required(),
+    department: Joi.string().max(100).optional(),
+    location: Joi.string().max(255).optional(),
+    specialization: Joi.string().max(255).optional(),
+    licenseNumber: Joi.string().max(100).optional(),
+    emergencyContact: Joi.object({
+      name: Joi.string().required(),
+      phone: Joi.string().required(),
+      relationship: Joi.string().required()
+    }).optional(),
+    address: Joi.object({
+      street: Joi.string().required(),
+      city: Joi.string().required(),
+      state: Joi.string().required(),
+      zipCode: Joi.string().required(),
+      country: Joi.string().required()
+    }).optional()
+  }),
+
+  userLogin: Joi.object({
+    email: Joi.string().email().required(),
+    password: Joi.string().required()
+  }),
+
+  userUpdate: Joi.object({
+    firstName: Joi.string().min(2).max(100).optional(),
+    lastName: Joi.string().min(2).max(100).optional(),
+    phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
+    department: Joi.string().max(100).optional(),
+    location: Joi.string().max(255).optional(),
+    specialization: Joi.string().max(255).optional(),
+    licenseNumber: Joi.string().max(100).optional(),
+    emergencyContact: Joi.object({
+      name: Joi.string().required(),
+      phone: Joi.string().required(),
+      relationship: Joi.string().required()
+    }).optional(),
+    address: Joi.object({
+      street: Joi.string().required(),
+      city: Joi.string().required(),
+      state: Joi.string().required(),
+      zipCode: Joi.string().required(),
+      country: Joi.string().required()
+    }).optional()
+  }),
+
+  // Job validation
+  jobCreation: Joi.object({
+    title: Joi.string().min(5).max(255).required(),
+    description: Joi.string().required(),
+    department: Joi.string().max(100).required(),
+    location: Joi.string().max(255).required(),
+    requiredRole: Joi.string().valid('DOCTOR', 'NURSE').required(),
+    specialization: Joi.string().max(255).optional(),
+    startDate: Joi.date().greater('now').required(),
+    endDate: Joi.date().greater(Joi.ref('startDate')).required(),
+    startTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
+    endTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
+    hourlyRate: Joi.number().positive().required(),
+    priority: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'URGENT').optional(),
+    maxAssignments: Joi.number().integer().min(1).optional(),
+    requirements: Joi.object().optional(),
+    benefits: Joi.object().optional(),
+    facilityName: Joi.string().max(255).required(),
+    facilityAddress: Joi.object({
+      street: Joi.string().required(),
+      city: Joi.string().required(),
+      state: Joi.string().required(),
+      zipCode: Joi.string().required(),
+      country: Joi.string().required()
+    }).required(),
+    contactPerson: Joi.object({
+      name: Joi.string().required(),
+      phone: Joi.string().required(),
+      email: Joi.string().email().required(),
+      position: Joi.string().required()
+    }).optional(),
+    notes: Joi.string().optional(),
+    isRecurring: Joi.boolean().optional(),
+    recurringPattern: Joi.object().optional()
+  }),
+
+  jobUpdate: Joi.object({
+    title: Joi.string().min(5).max(255).optional(),
+    description: Joi.string().optional(),
+    department: Joi.string().max(100).optional(),
+    location: Joi.string().max(255).optional(),
+    requiredRole: Joi.string().valid('DOCTOR', 'NURSE').optional(),
+    specialization: Joi.string().max(255).optional(),
+    startDate: Joi.date().greater('now').optional(),
+    endDate: Joi.date().greater(Joi.ref('startDate')).optional(),
+    startTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+    endTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
+    hourlyRate: Joi.number().positive().optional(),
+    priority: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'URGENT').optional(),
+    maxAssignments: Joi.number().integer().min(1).optional(),
+    requirements: Joi.object().optional(),
+    benefits: Joi.object().optional(),
+    facilityName: Joi.string().max(255).optional(),
+    facilityAddress: Joi.object({
+      street: Joi.string().required(),
+      city: Joi.string().required(),
+      state: Joi.string().required(),
+      zipCode: Joi.string().required(),
+      country: Joi.string().required()
+    }).optional(),
+    contactPerson: Joi.object({
+      name: Joi.string().required(),
+      phone: Joi.string().required(),
+      email: Joi.string().email().required(),
+      position: Joi.string().required()
+    }).optional(),
+    notes: Joi.string().optional(),
+    isRecurring: Joi.boolean().optional(),
+    recurringPattern: Joi.object().optional()
+  }),
+
+  // Job assignment validation
+  jobAssignment: Joi.object({
+    userId: Joi.number().integer().positive().required(),
+    hourlyRate: Joi.number().positive().optional(),
+    notes: Joi.string().optional()
+  }),
+
+  jobAcceptance: Joi.object({
+    assignmentId: Joi.number().integer().positive().required(),
+    action: Joi.string().valid('ACCEPT', 'REJECT').required(),
+    rejectionReason: Joi.string().when('action', {
+      is: 'REJECT',
+      then: Joi.required(),
+      otherwise: Joi.optional()
+    })
+  }),
+
+  // Check-in validation
+  checkIn: Joi.object({
+    jobAssignmentId: Joi.number().integer().positive().required(),
+    location: Joi.object({
+      latitude: Joi.number().required(),
+      longitude: Joi.number().required(),
+      address: Joi.string().optional()
+    }).optional(),
+    notes: Joi.string().optional()
+  }),
+
+  checkOut: Joi.object({
+    jobAssignmentId: Joi.number().integer().positive().required(),
+    location: Joi.object({
+      latitude: Joi.number().required(),
+      longitude: Joi.number().required(),
+      address: Joi.string().optional()
+    }).optional(),
+    notes: Joi.string().optional()
+  }),
+
+  // Extension request validation
+  extensionRequest: Joi.object({
+    reason: Joi.string().min(10).max(500).required(),
+    requestedHours: Joi.number().positive().optional()
+  }),
+
+  // Report validation
+  reportGeneration: Joi.object({
+    title: Joi.string().max(255).required(),
+    type: Joi.string().valid(
+      'JOB_POSTINGS',
+      'JOB_ASSIGNMENTS',
+      'STAFF_PERFORMANCE',
+      'FINANCIAL',
+      'ATTENDANCE',
+      'UTILIZATION',
+      'CUSTOM'
+    ).required(),
+    parameters: Joi.object().optional(),
+    fileFormat: Joi.string().valid('JSON', 'CSV', 'PDF', 'EXCEL').optional()
+  }),
+
+  // Query parameters validation
+  pagination: Joi.object({
+    page: Joi.number().integer().min(1).default(1),
+    limit: Joi.number().integer().min(1).max(100).default(10),
+    sortBy: Joi.string().optional(),
+    sortOrder: Joi.string().valid('ASC', 'DESC').default('DESC')
+  }),
+
+  jobFilters: Joi.object({
+    department: Joi.string().optional(),
+    location: Joi.string().optional(),
+    requiredRole: Joi.string().valid('DOCTOR', 'NURSE').optional(),
+    status: Joi.string().valid('ACTIVE', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED').optional(),
+    priority: Joi.string().valid('LOW', 'MEDIUM', 'HIGH', 'URGENT').optional(),
+    startDate: Joi.date().optional(),
+    endDate: Joi.date().optional(),
+    minRate: Joi.number().positive().optional(),
+    maxRate: Joi.number().positive().optional()
+  })
+};
+
+// Validation middleware factory
+const validate = (schema, property = 'body') => {
+  return (req, res, next) => {
+    const { error, value } = schema.validate(req[property], {
+      abortEarly: false,
+      stripUnknown: true
+    });
+
+    if (error) {
+      const errors = error.details.map(detail => ({
+        field: detail.path.join('.'),
+        message: detail.message
+      }));
+
+      return res.status(400).json({
+        error: 'Validation failed',
+        details: errors
+      });
+    }
+
+    req[property] = value;
+    next();
+  };
+};
+
+// Custom validation functions
+const validateDateRange = (startDate, endDate) => {
+  if (new Date(startDate) >= new Date(endDate)) {
+    throw new Error('End date must be after start date');
+  }
+};
+
+const validateTimeRange = (startTime, endTime) => {
+  const start = startTime.split(':').map(Number);
+  const end = endTime.split(':').map(Number);
+  
+  if (start[0] > end[0] || (start[0] === end[0] && start[1] >= end[1])) {
+    throw new Error('End time must be after start time');
+  }
+};
+
+module.exports = {
+  schemas,
+  validate,
+  validateDateRange,
+  validateTimeRange
+};

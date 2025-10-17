@@ -1,0 +1,1372 @@
+{
+  "info": {
+    "name": "Locum Healthcare Backend API",
+    "description": "Complete API collection for Locum Healthcare Staffing Backend System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "job_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "assignment_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "permission_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "master_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "hospital_id",
+      "value": "13",
+      "type": "string"
+    },
+    {
+      "key": "unit_code",
+      "value": "ICU",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newuser@locum.com\",\n  \"password\": \"password123\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"role\": \"DOCTOR\",\n  \"department\": \"Emergency Medicine\",\n  \"location\": \"New York\",\n  \"specialization\": \"Emergency Medicine\",\n  \"licenseNumber\": \"MD123456\",\n  \"phone\": \"+1234567890\",\n  \"emergencyContact\": {\n    \"name\": \"Jane Doe\",\n    \"phone\": \"+1234567891\",\n    \"relationship\": \"Spouse\"\n  },\n  \"address\": {\n    \"street\": \"123 Main St\",\n    \"city\": \"New York\",\n    \"state\": \"NY\",\n    \"zipCode\": \"10001\",\n    \"country\": \"USA\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('jwt_token', response.token);",
+                  "    pm.collectionVariables.set('user_id', response.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@locum.com\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Updated Name\",\n  \"lastName\": \"Updated Last\",\n  \"phone\": \"+1234567899\",\n  \"department\": \"Updated Department\",\n  \"location\": \"Updated Location\",\n  \"specialization\": \"Updated Specialization\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "profile"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"admin123\",\n  \"newPassword\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/change-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "change-password"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/refresh",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "HR Management",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/users?page=1&limit=10&sortBy=createdAt&sortOrder=DESC",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "sortBy",
+                  "value": "createdAt"
+                },
+                {
+                  "key": "sortOrder",
+                  "value": "DESC"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "users", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Job Posting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('job_id', response.job.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Emergency Medicine Physician - Night Shift\",\n  \"description\": \"Urgent need for an experienced emergency medicine physician for night shift coverage. Must be board certified in emergency medicine with at least 3 years of experience.\",\n  \"department\": \"Emergency Medicine\",\n  \"location\": \"New York General Hospital\",\n  \"requiredRole\": \"DOCTOR\",\n  \"specialization\": \"Emergency Medicine\",\n  \"startDate\": \"2024-01-20\",\n  \"endDate\": \"2024-01-21\",\n  \"startTime\": \"22:00\",\n  \"endTime\": \"06:00\",\n  \"hourlyRate\": 150.00,\n  \"priority\": \"URGENT\",\n  \"maxAssignments\": 1,\n  \"requirements\": {\n    \"boardCertified\": true,\n    \"experience\": \"3+ years\",\n    \"skills\": [\"Trauma Care\", \"Critical Care\", \"Emergency Procedures\"]\n  },\n  \"benefits\": {\n    \"mealAllowance\": true,\n    \"parking\": true,\n    \"malpractice\": true\n  },\n  \"facilityName\": \"New York General Hospital\",\n  \"facilityAddress\": {\n    \"street\": \"123 Medical Center Dr\",\n    \"city\": \"New York\",\n    \"state\": \"NY\",\n    \"zipCode\": \"10001\",\n    \"country\": \"USA\"\n  },\n  \"contactPerson\": {\n    \"name\": \"Dr. Sarah Johnson\",\n    \"phone\": \"+1234567891\",\n    \"email\": \"hr1@locum.com\",\n    \"position\": \"HR Manager\"\n  },\n  \"notes\": \"High priority position. Immediate start required.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/jobs",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "jobs"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/jobs?page=1&limit=10&department=Emergency Medicine&location=New York&requiredRole=DOCTOR&status=ACTIVE&priority=URGENT",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "jobs"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "department",
+                  "value": "Emergency Medicine"
+                },
+                {
+                  "key": "location",
+                  "value": "New York"
+                },
+                {
+                  "key": "requiredRole",
+                  "value": "DOCTOR"
+                },
+                {
+                  "key": "status",
+                  "value": "ACTIVE"
+                },
+                {
+                  "key": "priority",
+                  "value": "URGENT"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/jobs/{{job_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "jobs", "{{job_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Job",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Emergency Medicine Physician - Night Shift\",\n  \"description\": \"Updated description for the job posting.\",\n  \"hourlyRate\": 160.00,\n  \"priority\": \"HIGH\",\n  \"notes\": \"Updated notes for the job.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/jobs/{{job_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "jobs", "{{job_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Job",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Job cancelled due to facility closure\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/jobs/{{job_id}}/cancel",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "jobs", "{{job_id}}", "cancel"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Assign Job to User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('assignment_id', response.assignment.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{user_id}}\",\n  \"hourlyRate\": 150.00,\n  \"notes\": \"Direct assignment by HR\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/jobs/{{job_id}}/assign",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "jobs", "{{job_id}}", "assign"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job Assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/jobs/{{job_id}}/assignments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "jobs", "{{job_id}}", "assignments"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job Status Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/jobs/{{job_id}}/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "jobs", "{{job_id}}", "status"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get HR Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/hr/dashboard",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "hr", "dashboard"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Staff APIs (Doctors & Nurses)",
+      "item": [
+        {
+          "name": "Get Available Jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/jobs/available?page=1&limit=10&department=Emergency Medicine&location=New York&specialization=Emergency Medicine&minRate=100&maxRate=200",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "jobs", "available"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "department",
+                  "value": "Emergency Medicine"
+                },
+                {
+                  "key": "location",
+                  "value": "New York"
+                },
+                {
+                  "key": "specialization",
+                  "value": "Emergency Medicine"
+                },
+                {
+                  "key": "minRate",
+                  "value": "100"
+                },
+                {
+                  "key": "maxRate",
+                  "value": "200"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/assignments?page=1&limit=10&status=ACCEPTED",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "assignments"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "ACCEPTED"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Accept Job Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"ACCEPT\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/assignments/{{assignment_id}}/respond",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "assignments", "{{assignment_id}}", "respond"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reject Job Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"REJECT\",\n  \"rejectionReason\": \"Schedule conflict with existing commitment\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/assignments/{{assignment_id}}/respond",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "assignments", "{{assignment_id}}", "respond"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Active Assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/assignments/active",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "assignments", "active"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobAssignmentId\": \"{{assignment_id}}\",\n  \"location\": {\n    \"latitude\": 40.7128,\n    \"longitude\": -74.0060,\n    \"address\": \"New York General Hospital\"\n  },\n  \"notes\": \"Starting my shift\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/check-in",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "check-in"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Check Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobAssignmentId\": \"{{assignment_id}}\",\n  \"location\": {\n    \"latitude\": 40.7128,\n    \"longitude\": -74.0060,\n    \"address\": \"New York General Hospital\"\n  },\n  \"notes\": \"Ending my shift\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/check-out",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "check-out"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Work Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/status",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "status"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Request Job Extension",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Patient needs additional care\",\n  \"requestedHours\": 2\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/staff/assignments/{{assignment_id}}/request-extension",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "staff", "assignments", "{{assignment_id}}", "request-extension"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "General Jobs",
+      "item": [
+        {
+          "name": "Search Jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/search?page=1&limit=10&search=emergency&department=Emergency Medicine&location=New York&requiredRole=DOCTOR&minRate=100&maxRate=200",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "search"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "search",
+                  "value": "emergency"
+                },
+                {
+                  "key": "department",
+                  "value": "Emergency Medicine"
+                },
+                {
+                  "key": "location",
+                  "value": "New York"
+                },
+                {
+                  "key": "requiredRole",
+                  "value": "DOCTOR"
+                },
+                {
+                  "key": "minRate",
+                  "value": "100"
+                },
+                {
+                  "key": "maxRate",
+                  "value": "200"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/{{job_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "{{job_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/categories/departments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "categories", "departments"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Locations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/categories/locations",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "categories", "locations"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Specializations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/categories/specializations",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "categories", "specializations"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Urgent Jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/featured/urgent",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "featured", "urgent"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recent Jobs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/featured/recent",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "featured", "recent"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Job Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/jobs/stats/overview",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "jobs", "stats", "overview"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Generate Job Postings Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Monthly Job Postings Report\",\n  \"type\": \"JOB_POSTINGS\",\n  \"parameters\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-01-31\",\n    \"department\": \"Emergency Medicine\",\n    \"location\": \"New York\",\n    \"status\": \"ACTIVE\"\n  },\n  \"fileFormat\": \"JSON\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/job-postings",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "job-postings"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Job Assignments Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Job Assignments Report\",\n  \"type\": \"JOB_ASSIGNMENTS\",\n  \"parameters\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-01-31\",\n    \"status\": \"COMPLETED\",\n    \"userId\": \"{{user_id}}\"\n  },\n  \"fileFormat\": \"CSV\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/job-assignments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "job-assignments"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Staff Performance Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Staff Performance Report\",\n  \"type\": \"STAFF_PERFORMANCE\",\n  \"parameters\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-01-31\",\n    \"role\": \"DOCTOR\",\n    \"department\": \"Emergency Medicine\"\n  },\n  \"fileFormat\": \"PDF\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/staff-performance",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "staff-performance"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Financial Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Financial Report\",\n  \"type\": \"FINANCIAL\",\n  \"parameters\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-01-31\",\n    \"department\": \"Emergency Medicine\",\n    \"location\": \"New York\"\n  },\n  \"fileFormat\": \"EXCEL\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/financial",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "financial"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Attendance Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Attendance Report\",\n  \"type\": \"ATTENDANCE\",\n  \"parameters\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-01-31\",\n    \"userId\": \"{{user_id}}\",\n    \"department\": \"Emergency Medicine\"\n  },\n  \"fileFormat\": \"JSON\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/attendance",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "attendance"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports?page=1&limit=10&type=JOB_POSTINGS",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "type",
+                  "value": "JOB_POSTINGS"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Report by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Report",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/reports/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reports", "1"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Permission Management",
+      "item": [
+        {
+          "name": "Get All Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions?page=1&limit=50&category=USER_MANAGEMENT&resource=users&action=CREATE&scope=GLOBAL",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "category",
+                  "value": "USER_MANAGEMENT"
+                },
+                {
+                  "key": "resource",
+                  "value": "users"
+                },
+                {
+                  "key": "action",
+                  "value": "CREATE"
+                },
+                {
+                  "key": "scope",
+                  "value": "GLOBAL"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Permission Definition",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Custom Permission\",\n  \"code\": \"CUSTOM_PERMISSION\",\n  \"description\": \"A custom permission for specific operations\",\n  \"category\": \"SYSTEM_MANAGEMENT\",\n  \"resource\": \"custom\",\n  \"action\": \"CREATE\",\n  \"scope\": \"GLOBAL\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Permission by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Permission Definition",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Custom Permission\",\n  \"description\": \"Updated description for the custom permission\",\n  \"isActive\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Permission Definition",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Permission Masters",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/masters?role=HR",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "masters"],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "HR"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Permission Master",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Custom HR Master\",\n  \"code\": \"CUSTOM_HR_MASTER\",\n  \"description\": \"Custom permission master for HR role\",\n  \"role\": \"HR\",\n  \"permissions\": [1, 2, 3, 4],\n  \"hospitalPermissions\": [5, 6, 7],\n  \"unitPermissions\": [8, 9],\n  \"isDefault\": false,\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/masters",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "masters"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Permission Master",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Custom HR Master\",\n  \"description\": \"Updated description for the custom HR master\",\n  \"permissions\": [1, 2, 3, 4, 5],\n  \"isActive\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/masters/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "masters", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Permission Master",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/masters/1",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "masters", "1"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Grant Staff Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissionId\": 1,\n  \"expiresAt\": \"2024-12-31T23:59:59.000Z\",\n  \"notes\": \"Temporary permission grant for special project\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/grant/staff/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "grant", "staff", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Grant Hospital Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissionId\": 5,\n  \"expiresAt\": \"2024-12-31T23:59:59.000Z\",\n  \"notes\": \"Hospital-specific permission for job management\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/grant/hospital/{{user_id}}/{{hospital_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "grant", "hospital", "{{user_id}}", "{{hospital_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Grant Unit Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissionId\": 6,\n  \"expiresAt\": \"2024-12-31T23:59:59.000Z\",\n  \"notes\": \"Unit-specific permission for ICU operations\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/grant/unit/{{user_id}}/{{hospital_id}}/{{unit_code}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "grant", "unit", "{{user_id}}", "{{hospital_id}}", "{{unit_code}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "users", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Grant User Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissionId\": 1,\n  \"expiresAt\": \"2024-12-31T23:59:59.000Z\",\n  \"notes\": \"Temporary permission grant for special project\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/users/{{user_id}}/grant",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "users", "{{user_id}}", "grant"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Revoke User Permission",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissionId\": 1,\n  \"notes\": \"Permission revoked due to project completion\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/users/{{user_id}}/revoke",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "users", "{{user_id}}", "revoke"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Apply Permission Master to User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"masterId\": 1,\n  \"notes\": \"Applied default permission master\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/users/{{user_id}}/apply-master",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "users", "{{user_id}}", "apply-master"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Hospital Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/hospitals/{{hospital_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "hospitals", "{{hospital_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/permissions/my-permissions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "permissions", "my-permissions"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
