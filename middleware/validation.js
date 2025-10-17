@@ -12,6 +12,8 @@ const schemas = {
     role: Joi.string().valid('HR', 'DOCTOR', 'NURSE', 'ADMIN').required(),
     department: Joi.string().max(100).optional(),
     location: Joi.string().max(255).optional(),
+    hospitalId: Joi.number().integer().positive().optional(),
+    unitCode: Joi.string().max(50).optional(),
     specialization: Joi.string().max(255).optional(),
     licenseNumber: Joi.string().max(100).optional(),
     emergencyContact: Joi.object({
@@ -39,6 +41,8 @@ const schemas = {
     phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
     department: Joi.string().max(100).optional(),
     location: Joi.string().max(255).optional(),
+    hospitalId: Joi.number().integer().positive().optional(),
+    unitCode: Joi.string().max(50).optional(),
     specialization: Joi.string().max(255).optional(),
     licenseNumber: Joi.string().max(100).optional(),
     emergencyContact: Joi.object({
@@ -72,6 +76,8 @@ const schemas = {
     maxAssignments: Joi.number().integer().min(1).optional(),
     requirements: Joi.object().optional(),
     benefits: Joi.object().optional(),
+    hospitalId: Joi.number().integer().positive().required(),
+    unitCode: Joi.string().max(50).required(),
     facilityName: Joi.string().max(255).required(),
     facilityAddress: Joi.object({
       street: Joi.string().required(),

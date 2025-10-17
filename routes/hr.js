@@ -77,6 +77,7 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
       ...req.body,
       createdBy: req.userId
     };
+    console.log("jobData: ", jobData);
 
     const job = await Job.create(jobData);
 
