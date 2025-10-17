@@ -42,6 +42,8 @@ app.use('/api/v1/staff', require('./routes/staff')); // Unified route for doctor
 app.use('/api/v1/jobs', require('./routes/jobs'));
 app.use('/api/v1/reports', require('./routes/reports'));
 app.use('/api/v1/permissions', require('./routes/permissions'));
+app.use('/api/v1/admin', require('./routes/admin')); // Admin routes for hospital/unit management
+app.use('/api/v1/public', require('./routes/public')); // Public routes (no auth required)
 
 // Health check endpoint
 app.get('/health', (req, res) => {

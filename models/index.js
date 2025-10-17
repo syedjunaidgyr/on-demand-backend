@@ -150,6 +150,7 @@ module.exports = {
   CheckIn,
   Report,
   Hospital,
+  Unit,
   Permission,
   HospitalPermission,
   UnitPermission,

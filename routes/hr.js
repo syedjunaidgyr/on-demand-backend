@@ -103,38 +103,6 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
     });
   }
 });
-// List units for a hospital (read-only for selectors)
-router.get('/hospitals/:id/units', async (req, res) => {
-  try {
-    const units = await Unit.findAll({
-      where: { hospitalId: req.params.id, isActive: true },
-      attributes: ['unitCode', 'unitName', 'isActive']
-    });
-    res.json({ units });
-  } catch (error) {
-    console.error('Get units error:', error);
-    res.status(500).json({
-      error: 'Failed to fetch units',
-      message: error.message
-    });
-  }
-});
-
-// List hospitals (read-only for selectors)
-router.get('/hospitals', async (req, res) => {
-  try {
-    const hospitals = await Hospital.findAll({
-      attributes: ['id', 'name', 'code', 'isActive']
-    });
-    res.json({ hospitals });
-  } catch (error) {
-    console.error('Get hospitals error:', error);
-    res.status(500).json({
-      error: 'Failed to fetch hospitals',
-      message: error.message
-    });
-  }
-});
 
 // Get all jobs with filters
 router.get('/jobs', validate(schemas.pagination, 'query'), async (req, res) => {

@@ -6,6 +6,9 @@ const schemas = {
   userRegistration: Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
+    confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
+      'any.only': 'Password confirmation does not match password'
+    }),
     firstName: Joi.string().min(2).max(100).required(),
     lastName: Joi.string().min(2).max(100).required(),
     phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
@@ -57,6 +60,14 @@ const schemas = {
       zipCode: Joi.string().required(),
       country: Joi.string().required()
     }).optional()
+  }),
+
+  passwordChange: Joi.object({
+    currentPassword: Joi.string().required(),
+    newPassword: Joi.string().min(6).required(),
+    confirmPassword: Joi.string().valid(Joi.ref('newPassword')).required().messages({
+      'any.only': 'Password confirmation does not match new password'
+    })
   }),
 
   // Job validation
@@ -210,6 +221,50 @@ const schemas = {
     endDate: Joi.date().optional(),
     minRate: Joi.number().positive().optional(),
     maxRate: Joi.number().positive().optional()
+  }),
+
+  // Hospital creation schema
+  hospitalCreation: Joi.object({
+    name: Joi.string().min(2).max(255).required(),
+    code: Joi.string().min(2).max(50).required(),
+    address: Joi.string().max(500).optional(),
+    city: Joi.string().max(100).optional(),
+    state: Joi.string().max(50).optional(),
+    zipCode: Joi.string().max(20).optional(),
+    country: Joi.string().max(100).optional(),
+    phone: Joi.string().max(20).optional(),
+    email: Joi.string().email().optional(),
+    website: Joi.string().uri().optional(),
+    isActive: Joi.boolean().default(true)
+  }),
+
+  // Hospital update schema
+  hospitalUpdate: Joi.object({
+    name: Joi.string().min(2).max(255).optional(),
+    code: Joi.string().min(2).max(50).optional(),
+    address: Joi.string().max(500).optional(),
+    city: Joi.string().max(100).optional(),
+    state: Joi.string().max(50).optional(),
+    zipCode: Joi.string().max(20).optional(),
+    country: Joi.string().max(100).optional(),
+    phone: Joi.string().max(20).optional(),
+    email: Joi.string().email().optional(),
+    website: Joi.string().uri().optional(),
+    isActive: Joi.boolean().optional()
+  }),
+
+  // Unit creation schema
+  unitCreation: Joi.object({
+    unitCode: Joi.string().min(2).max(50).required(),
+    unitName: Joi.string().min(2).max(255).required(),
+    isActive: Joi.boolean().default(true)
+  }),
+
+  // Unit update schema
+  unitUpdate: Joi.object({
+    unitCode: Joi.string().min(2).max(50).optional(),
+    unitName: Joi.string().min(2).max(255).optional(),
+    isActive: Joi.boolean().optional()
   })
 };
 
