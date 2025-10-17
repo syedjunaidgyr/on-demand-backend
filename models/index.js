@@ -5,6 +5,7 @@ const JobAssignment = require('./JobAssignment');
 const CheckIn = require('./CheckIn');
 const Report = require('./Report');
 const Hospital = require('./Hospital');
+const Unit = require('./Unit');
 const Permission = require('./Permission');
 const HospitalPermission = require('./HospitalPermission');
 const UnitPermission = require('./UnitPermission');
@@ -18,6 +19,10 @@ User.belongsTo(Hospital, { foreignKey: 'hospitalId', as: 'hospital' });
 
 Hospital.hasMany(Job, { foreignKey: 'hospitalId', as: 'jobs' });
 Job.belongsTo(Hospital, { foreignKey: 'hospitalId', as: 'hospital' });
+
+// Unit associations (alias avoids collision with Hospital JSON field `units`)
+Hospital.hasMany(Unit, { foreignKey: 'hospitalId', as: 'unitMasters' });
+Unit.belongsTo(Hospital, { foreignKey: 'hospitalId', as: 'hospital' });
 
 // User and Job associations
 User.hasMany(Job, { foreignKey: 'createdBy', as: 'createdJobs' });
@@ -111,6 +116,26 @@ const syncDatabase = async () => {
     }
     
     console.log('✅ Database models synchronized successfully.');
+
+    // Bootstrap Unit master from Hospital.units JSON if Units are empty
+    const [unitsCountResult] = await sequelize.query('SELECT COUNT(*) as count FROM units');
+    const unitsCount = Array.isArray(unitsCountResult) ? unitsCountResult[0].count : unitsCountResult.count;
+    if (Number(unitsCount) === 0) {
+      const hospitals = await Hospital.findAll();
+      const unitsToCreate = [];
+      for (const hospital of hospitals) {
+        const jsonUnits = hospital.units || [];
+        for (const u of jsonUnits) {
+          if (u && u.code && u.name) {
+            unitsToCreate.push({ hospitalId: hospital.id, unitCode: u.code, unitName: u.name, isActive: true });
+          }
+        }
+      }
+      if (unitsToCreate.length > 0) {
+        await Unit.bulkCreate(unitsToCreate, { ignoreDuplicates: true });
+        console.log(`✅ Bootstrapped ${unitsToCreate.length} unit records from Hospital JSON.`);
+      }
+    }
   } catch (error) {
     console.error('❌ Error synchronizing database models:', error);
     throw error;

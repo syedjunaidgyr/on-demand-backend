@@ -1,6 +1,6 @@
 const express = require('express');
 const { Op } = require('sequelize');
-const { User, Job, JobAssignment, CheckIn } = require('../models');
+const { User, Job, JobAssignment, CheckIn, Hospital, Unit } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 
@@ -73,6 +73,16 @@ router.get('/users/:id', async (req, res) => {
 // Create new job posting
 router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
   try {
+    // Validate hospitalId + unitCode pair exists and active
+    const { hospitalId, unitCode } = req.body;
+    const unit = await Unit.findOne({ where: { hospitalId, unitCode, isActive: true } });
+    if (!unit) {
+      return res.status(400).json({
+        error: 'Invalid unit selection',
+        message: 'Selected unitCode is not valid or inactive for the chosen hospital'
+      });
+    }
+
     const jobData = {
       ...req.body,
       createdBy: req.userId
@@ -89,6 +99,38 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
     console.error('Job creation error:', error);
     res.status(500).json({
       error: 'Failed to create job',
+      message: error.message
+    });
+  }
+});
+// List units for a hospital (read-only for selectors)
+router.get('/hospitals/:id/units', async (req, res) => {
+  try {
+    const units = await Unit.findAll({
+      where: { hospitalId: req.params.id, isActive: true },
+      attributes: ['unitCode', 'unitName', 'isActive']
+    });
+    res.json({ units });
+  } catch (error) {
+    console.error('Get units error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch units',
+      message: error.message
+    });
+  }
+});
+
+// List hospitals (read-only for selectors)
+router.get('/hospitals', async (req, res) => {
+  try {
+    const hospitals = await Hospital.findAll({
+      attributes: ['id', 'name', 'code', 'isActive']
+    });
+    res.json({ hospitals });
+  } catch (error) {
+    console.error('Get hospitals error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch hospitals',
       message: error.message
     });
   }
