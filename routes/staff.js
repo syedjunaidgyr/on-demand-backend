@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const { User, Job, JobAssignment, CheckIn, Hospital } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
+const { isStaffCompatibleWithJob } = require('../utils/helpers');
 
 const router = express.Router();
 
@@ -29,6 +30,8 @@ router.get('/jobs/available', async (req, res) => {
     const offset = (page - 1) * limit;
     const whereClause = {
       requiredRole: req.user.role, // Filter by user's role (DOCTOR or NURSE)
+      department: req.user.department, // Filter by user's department
+      specialization: req.user.specialization, // Filter by user's specialization
       status: 'ACTIVE',
       startDate: {
         [Op.gte]: new Date() // Only future jobs

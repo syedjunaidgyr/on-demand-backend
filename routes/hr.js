@@ -2,7 +2,8 @@ const express = require('express');
 const { Op } = require('sequelize');
 const { User, Job, JobAssignment, CheckIn, Hospital, Unit } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
-const { validate, schemas } = require('../middleware/validation');
+const { validate, schemas, validateDepartmentSpecialization } = require('../middleware/validation');
+const { findCompatibleStaff } = require('../utils/helpers');
 
 const router = express.Router();
 
@@ -73,13 +74,24 @@ router.get('/users/:id', async (req, res) => {
 // Create new job posting
 router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
   try {
+    const { hospitalId, unitCode, department, specialization } = req.body;
+    
     // Validate hospitalId + unitCode pair exists and active
-    const { hospitalId, unitCode } = req.body;
     const unit = await Unit.findOne({ where: { hospitalId, unitCode, isActive: true } });
     if (!unit) {
       return res.status(400).json({
         error: 'Invalid unit selection',
         message: 'Selected unitCode is not valid or inactive for the chosen hospital'
+      });
+    }
+
+    // Validate department and specialization consistency
+    try {
+      validateDepartmentSpecialization(department, specialization);
+    } catch (validationError) {
+      return res.status(400).json({
+        error: 'Invalid department/specialization combination',
+        message: validationError.message
       });
     }
 
@@ -91,9 +103,28 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
 
     const job = await Job.create(jobData);
 
+    // Find compatible staff for this job (for HR information)
+    const compatibleStaff = await User.findAll({
+      where: {
+        role: job.requiredRole,
+        department: job.department,
+        specialization: job.specialization,
+        isActive: true
+      },
+      attributes: ['id', 'firstName', 'lastName', 'email', 'department', 'specialization']
+    });
+
     res.status(201).json({
       message: 'Job posted successfully',
-      job
+      job,
+      compatibleStaffCount: compatibleStaff.length,
+      compatibleStaff: compatibleStaff.map(staff => ({
+        id: staff.id,
+        name: `${staff.firstName} ${staff.lastName}`,
+        email: staff.email,
+        department: staff.department,
+        specialization: staff.specialization
+      }))
     });
   } catch (error) {
     console.error('Job creation error:', error);
@@ -351,6 +382,30 @@ router.post('/jobs/:id/assign', validate(schemas.jobAssignment), async (req, res
       });
     }
 
+    // Check department compatibility
+    if (user.department !== job.department) {
+      return res.status(400).json({
+        error: 'Department mismatch',
+        message: `User department (${user.department}) does not match job department (${job.department})`
+      });
+    }
+
+    // Check specialization compatibility
+    if (user.specialization !== job.specialization) {
+      return res.status(400).json({
+        error: 'Specialization mismatch',
+        message: `User specialization (${user.specialization}) does not match job specialization (${job.specialization})`
+      });
+    }
+
+    // Check if user is active
+    if (!user.isActive) {
+      return res.status(400).json({
+        error: 'User inactive',
+        message: 'Cannot assign job to inactive user'
+      });
+    }
+
     // Check if already assigned
     const existingAssignment = await JobAssignment.findOne({
       where: { jobId, userId }
@@ -597,6 +652,72 @@ router.get('/dashboard', async (req, res) => {
     console.error('Dashboard error:', error);
     res.status(500).json({
       error: 'Failed to fetch dashboard data',
+      message: error.message
+    });
+  }
+});
+
+// Get compatible staff for a job
+router.get('/jobs/:id/compatible-staff', async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    const job = await Job.findByPk(jobId);
+    
+    if (!job) {
+      return res.status(404).json({
+        error: 'Job not found',
+        message: 'Job does not exist'
+      });
+    }
+
+    // Find all staff compatible with this job
+    const compatibleStaff = await User.findAll({
+      where: {
+        role: job.requiredRole,
+        department: job.department,
+        specialization: job.specialization,
+        isActive: true
+      },
+      attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'department', 'specialization', 'location'],
+      order: [['firstName', 'ASC']]
+    });
+
+    // Check which staff are already assigned to this job
+    const existingAssignments = await JobAssignment.findAll({
+      where: { jobId },
+      attributes: ['userId', 'status']
+    });
+
+    const assignedUserIds = existingAssignments.map(a => a.userId);
+    const assignmentStatuses = {};
+    existingAssignments.forEach(a => {
+      assignmentStatuses[a.userId] = a.status;
+    });
+
+    // Add assignment status to each staff member
+    const staffWithStatus = compatibleStaff.map(staff => ({
+      ...staff.toJSON(),
+      isAssigned: assignedUserIds.includes(staff.id),
+      assignmentStatus: assignmentStatuses[staff.id] || null
+    }));
+
+    res.json({
+      job: {
+        id: job.id,
+        title: job.title,
+        department: job.department,
+        specialization: job.specialization,
+        requiredRole: job.requiredRole
+      },
+      compatibleStaff: staffWithStatus,
+      totalCompatible: staffWithStatus.length,
+      available: staffWithStatus.filter(s => !s.isAssigned).length,
+      assigned: staffWithStatus.filter(s => s.isAssigned).length
+    });
+  } catch (error) {
+    console.error('Get compatible staff error:', error);
+    res.status(500).json({
+      error: 'Failed to get compatible staff',
       message: error.message
     });
   }

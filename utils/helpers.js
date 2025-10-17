@@ -243,6 +243,63 @@ const generateNotificationMessage = (type, data) => {
   return messages[type] || 'New notification';
 };
 
+// Staff compatibility utilities
+const isStaffCompatibleWithJob = (staff, job) => {
+  // Check role compatibility
+  if (staff.role !== job.requiredRole) {
+    return false;
+  }
+  
+  // Check department compatibility
+  if (staff.department !== job.department) {
+    return false;
+  }
+  
+  // Check specialization compatibility
+  if (staff.specialization !== job.specialization) {
+    return false;
+  }
+  
+  // Check if staff is active
+  if (!staff.isActive) {
+    return false;
+  }
+  
+  return true;
+};
+
+const findCompatibleStaff = (staffList, job) => {
+  return staffList.filter(staff => isStaffCompatibleWithJob(staff, job));
+};
+
+const getJobCompatibilityScore = (staff, job) => {
+  let score = 0;
+  
+  // Role match (required)
+  if (staff.role === job.requiredRole) {
+    score += 40;
+  } else {
+    return 0; // Must have matching role
+  }
+  
+  // Department match
+  if (staff.department === job.department) {
+    score += 30;
+  }
+  
+  // Specialization match
+  if (staff.specialization === job.specialization) {
+    score += 30;
+  }
+  
+  // Additional factors
+  if (staff.isActive) {
+    score += 10;
+  }
+  
+  return score;
+};
+
 module.exports = {
   // Date and time
   formatDate,
@@ -294,5 +351,10 @@ module.exports = {
   getRoleColor,
   
   // Notification
-  generateNotificationMessage
+  generateNotificationMessage,
+  
+  // Staff compatibility
+  isStaffCompatibleWithJob,
+  findCompatibleStaff,
+  getJobCompatibilityScore
 };

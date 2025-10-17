@@ -77,7 +77,9 @@ const schemas = {
     department: Joi.string().max(100).required(),
     location: Joi.string().max(255).required(),
     requiredRole: Joi.string().valid('DOCTOR', 'NURSE').required(),
-    specialization: Joi.string().max(255).optional(),
+    specialization: Joi.string().max(255).required().messages({
+      'any.required': 'Specialization is required and must match the department'
+    }),
     startDate: Joi.date().greater('now').required(),
     endDate: Joi.date().greater(Joi.ref('startDate')).required(),
     startTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
@@ -293,6 +295,30 @@ const validate = (schema, property = 'body') => {
   };
 };
 
+// Department-Specialization mapping (same as frontend)
+const departmentSpecializations = {
+  'Emergency Medicine': ['Trauma Care', 'Critical Care', 'Accident & Emergency', 'Emergency Surgery'],
+  'General Medicine': ['Internal Medicine', 'Diabetology', 'Infectious Diseases', 'Geriatric Medicine'],
+  'General Surgery': ['Laparoscopic Surgery', 'Gastrointestinal Surgery', 'Hernia Repair', 'Breast Surgery'],
+  'Obstetrics & Gynecology': ['Obstetrics', 'Gynecology', 'Infertility', 'Maternal-Fetal Medicine'],
+  'Pediatrics': ['Neonatology', 'Pediatric Neurology', 'Pediatric Cardiology', 'Child Development'],
+  'Orthopedics': ['Joint Replacement', 'Sports Medicine', 'Spine Surgery', 'Trauma Orthopedics'],
+  'Cardiology': ['Interventional Cardiology', 'Non-Invasive Cardiology', 'Pediatric Cardiology', 'Cardiac Rehabilitation'],
+  'Neurology': ['Stroke', 'Epilepsy', 'Neurophysiology', 'Movement Disorders'],
+  'Urology': ['Andrology', 'Endourology', 'Pediatric Urology', 'Uro-Oncology'],
+  'Nephrology': ['Dialysis', 'Renal Transplant', 'Chronic Kidney Disease', 'Hypertension Management'],
+  'Gastroenterology': ['Hepatology', 'Pancreatology', 'Endoscopy', 'Liver Transplant'],
+  'Oncology': ['Medical Oncology', 'Radiation Oncology', 'Surgical Oncology', 'Hematologic Oncology'],
+  'ENT': ['Otology (Ear)', 'Rhinology (Nose)', 'Laryngology (Throat)', 'Head & Neck Surgery'],
+  'Ophthalmology': ['Cataract Surgery', 'Glaucoma', 'Retina', 'Cornea & Refractive Surgery'],
+  'Dermatology': ['Cosmetic Dermatology', 'Trichology', 'Clinical Dermatology', 'Venereology'],
+  'Psychiatry': ['Child Psychiatry', 'Addiction Psychiatry', 'Clinical Psychology', 'Geriatric Psychiatry'],
+  'Radiology': ['MRI', 'CT Scan', 'Ultrasound', 'Interventional Radiology'],
+  'Pathology': ['Histopathology', 'Cytopathology', 'Hematology', 'Clinical Pathology'],
+  'Anesthesiology': ['Cardiac Anesthesia', 'Neuroanesthesia', 'Pain Management', 'Critical Care Anesthesia'],
+  'Physiotherapy': ['Orthopedic Physiotherapy', 'Neurological Physiotherapy', 'Cardiopulmonary Physiotherapy', 'Sports Rehabilitation'],
+};
+
 // Custom validation functions
 const validateDateRange = (startDate, endDate) => {
   if (new Date(startDate) >= new Date(endDate)) {
@@ -309,9 +335,26 @@ const validateTimeRange = (startTime, endTime) => {
   }
 };
 
+const validateDepartmentSpecialization = (department, specialization) => {
+  if (!department || !specialization) {
+    return; // Let Joi handle required field validation
+  }
+  
+  const validSpecializations = departmentSpecializations[department];
+  if (!validSpecializations) {
+    throw new Error(`Invalid department: ${department}`);
+  }
+  
+  if (!validSpecializations.includes(specialization)) {
+    throw new Error(`Specialization "${specialization}" is not valid for department "${department}". Valid specializations are: ${validSpecializations.join(', ')}`);
+  }
+};
+
 module.exports = {
   schemas,
   validate,
   validateDateRange,
-  validateTimeRange
+  validateTimeRange,
+  validateDepartmentSpecialization,
+  departmentSpecializations
 };
