@@ -1,5 +1,5 @@
 const { User, Job, JobAssignment, CheckIn, Report, Hospital } = require('../models');
-const seedHospitals = require('./hospital-seed');
+const seedIndianHospitals = require('./indian-hospital-seed');
 const seedPermissions = require('./permission-seed');
 
 const seedDatabase = async () => {
@@ -14,8 +14,8 @@ const seedDatabase = async () => {
       return;
     }
 
-    // Use hospital seed for the new structure
-    await seedHospitals();
+    // Use Indian hospital seed for the new structure
+    await seedIndianHospitals();
     
     // Seed permissions after users and hospitals are created
     await seedPermissions();

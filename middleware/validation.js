@@ -77,11 +77,15 @@ const schemas = {
     department: Joi.string().max(100).required(),
     location: Joi.string().max(255).required(),
     requiredRole: Joi.string().valid('DOCTOR', 'NURSE').required(),
-    specialization: Joi.string().max(255).required().messages({
-      'any.required': 'Specialization is required and must match the department'
+    specialization: Joi.string().max(255).when('requiredRole', {
+      is: 'DOCTOR',
+      then: Joi.required().messages({
+        'any.required': 'Specialization is required for doctor jobs and must match the department'
+      }),
+      otherwise: Joi.optional()
     }),
-    startDate: Joi.date().greater('now').required(),
-    endDate: Joi.date().greater(Joi.ref('startDate')).required(),
+    startDate: Joi.date().required(),
+    endDate: Joi.date().required(),
     startTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
     endTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
     hourlyRate: Joi.number().positive().required(),
@@ -117,8 +121,8 @@ const schemas = {
     location: Joi.string().max(255).optional(),
     requiredRole: Joi.string().valid('DOCTOR', 'NURSE').optional(),
     specialization: Joi.string().max(255).optional(),
-    startDate: Joi.date().greater('now').optional(),
-    endDate: Joi.date().greater(Joi.ref('startDate')).optional(),
+    startDate: Joi.date().optional(),
+    endDate: Joi.date().optional(),
     startTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
     endTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
     hourlyRate: Joi.number().positive().optional(),
@@ -153,7 +157,6 @@ const schemas = {
   }),
 
   jobAcceptance: Joi.object({
-    assignmentId: Joi.number().integer().positive().required(),
     action: Joi.string().valid('ACCEPT', 'REJECT').required(),
     rejectionReason: Joi.string().when('action', {
       is: 'REJECT',
@@ -165,22 +168,28 @@ const schemas = {
   // Check-in validation
   checkIn: Joi.object({
     jobAssignmentId: Joi.number().integer().positive().required(),
-    location: Joi.object({
-      latitude: Joi.number().required(),
-      longitude: Joi.number().required(),
-      address: Joi.string().optional()
-    }).optional(),
-    notes: Joi.string().optional()
+    location: Joi.alternatives().try(
+      Joi.object({
+        latitude: Joi.number().required(),
+        longitude: Joi.number().required(),
+        address: Joi.string().optional()
+      }),
+      Joi.string().allow('')
+    ).optional(),
+    notes: Joi.string().allow('').optional()
   }),
 
   checkOut: Joi.object({
     jobAssignmentId: Joi.number().integer().positive().required(),
-    location: Joi.object({
-      latitude: Joi.number().required(),
-      longitude: Joi.number().required(),
-      address: Joi.string().optional()
-    }).optional(),
-    notes: Joi.string().optional()
+    location: Joi.alternatives().try(
+      Joi.object({
+        latitude: Joi.number().required(),
+        longitude: Joi.number().required(),
+        address: Joi.string().optional()
+      }),
+      Joi.string().allow('')
+    ).optional(),
+    notes: Joi.string().allow('').optional()
   }),
 
   // Extension request validation
@@ -273,12 +282,20 @@ const schemas = {
 // Validation middleware factory
 const validate = (schema, property = 'body') => {
   return (req, res, next) => {
+    console.log('🔍 DEBUG: Validation request:', {
+      property,
+      data: req[property],
+      schema: schema.describe().keys ? Object.keys(schema.describe().keys) : 'unknown'
+    });
+
     const { error, value } = schema.validate(req[property], {
       abortEarly: false,
       stripUnknown: true
     });
 
     if (error) {
+      console.log('❌ DEBUG: Validation failed:', error.details);
+      
       const errors = error.details.map(detail => ({
         field: detail.path.join('.'),
         message: detail.message
@@ -335,9 +352,19 @@ const validateTimeRange = (startTime, endTime) => {
   }
 };
 
-const validateDepartmentSpecialization = (department, specialization) => {
-  if (!department || !specialization) {
+const validateDepartmentSpecialization = (department, specialization, requiredRole) => {
+  if (!department) {
     return; // Let Joi handle required field validation
+  }
+  
+  // For nurses, specialization is optional, so skip validation if not provided
+  if (requiredRole === 'NURSE' && !specialization) {
+    return;
+  }
+  
+  // For doctors, specialization is required
+  if (requiredRole === 'DOCTOR' && !specialization) {
+    throw new Error('Specialization is required for doctor jobs');
   }
   
   const validSpecializations = departmentSpecializations[department];
@@ -345,7 +372,7 @@ const validateDepartmentSpecialization = (department, specialization) => {
     throw new Error(`Invalid department: ${department}`);
   }
   
-  if (!validSpecializations.includes(specialization)) {
+  if (specialization && !validSpecializations.includes(specialization)) {
     throw new Error(`Specialization "${specialization}" is not valid for department "${department}". Valid specializations are: ${validSpecializations.join(', ')}`);
   }
 };

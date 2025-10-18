@@ -7,6 +7,135 @@ const { findCompatibleStaff } = require('../utils/helpers');
 
 const router = express.Router();
 
+// Public endpoint - Get accepted assignments for HR to review and select (NO AUTH REQUIRED)
+router.get('/jobs/:id/accepted-assignments', async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    
+    const acceptedAssignments = await JobAssignment.findAll({
+      where: { 
+        jobId: jobId,
+        status: 'ACCEPTED'
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'role', 'department', 'specialization', 'location']
+        },
+        {
+          model: User,
+          as: 'assigner',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        }
+      ],
+      order: [['acceptedAt', 'ASC']] // First to accept first
+    });
+
+    res.json({
+      jobId: jobId,
+      acceptedAssignments,
+      totalAccepted: acceptedAssignments.length
+    });
+  } catch (error) {
+    console.error('Get accepted assignments error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch accepted assignments',
+      message: error.message
+    });
+  }
+});
+
+// Public endpoint - Select final candidate from accepted assignments (NO AUTH REQUIRED)
+router.post('/jobs/:id/select-candidate', async (req, res) => {
+  try {
+    const { assignmentId } = req.body;
+    const jobId = req.params.id;
+
+    // Verify the assignment exists and is accepted
+    const selectedAssignment = await JobAssignment.findOne({
+      where: { 
+        id: assignmentId, 
+        jobId: jobId,
+        status: 'ACCEPTED'
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'role']
+        },
+        {
+          model: Job,
+          as: 'job',
+          attributes: ['id', 'title', 'maxAssignments']
+        }
+      ]
+    });
+
+    if (!selectedAssignment) {
+      return res.status(404).json({
+        error: 'Assignment not found',
+        message: 'Assignment does not exist or is not accepted'
+      });
+    }
+
+    // Check if job still has available slots
+    const currentAcceptedAssignments = await JobAssignment.count({
+      where: { 
+        jobId: jobId, 
+        status: 'ACCEPTED' 
+      }
+    });
+
+    if (currentAcceptedAssignments > selectedAssignment.job.maxAssignments) {
+      return res.status(400).json({
+        error: 'Job is full',
+        message: 'This job has already reached its maximum number of assignments'
+      });
+    }
+
+    // Confirm the selected assignment
+    await selectedAssignment.update({ 
+      status: 'ACCEPTED'
+    });
+
+    // Reject all other accepted assignments for this job
+    await JobAssignment.update(
+      { 
+        status: 'REJECTED',
+        rejectedAt: new Date(),
+        rejectionReason: 'Another candidate was selected for this job'
+      },
+      { 
+        where: { 
+          jobId: jobId,
+          status: 'ACCEPTED',
+          id: { [Op.ne]: assignmentId }
+        }
+      }
+    );
+
+    // Update job status to ASSIGNED
+    await Job.update(
+      { status: 'ASSIGNED' },
+      { where: { id: jobId }, validate: false }
+    );
+
+    res.json({
+      message: 'Candidate selected successfully',
+      selectedAssignment,
+      jobStatus: 'ASSIGNED'
+    });
+  } catch (error) {
+    console.error('Select candidate error:', error);
+    res.status(500).json({
+      error: 'Failed to select candidate',
+      message: error.message
+    });
+  }
+});
+
 // Apply authentication and HR authorization to all routes
 router.use(authenticate);
 router.use(authorize('HR', 'ADMIN'));
@@ -87,7 +216,7 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
 
     // Validate department and specialization consistency
     try {
-      validateDepartmentSpecialization(department, specialization);
+      validateDepartmentSpecialization(department, specialization, req.body.requiredRole);
     } catch (validationError) {
       return res.status(400).json({
         error: 'Invalid department/specialization combination',
@@ -103,21 +232,76 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
 
     const job = await Job.create(jobData);
 
-    // Find compatible staff for this job (for HR information)
+    // Find compatible staff for this job
+    const whereClause = {
+      role: job.requiredRole,
+      department: job.department,
+      isActive: true
+    };
+    
+    // For doctors, also match specialization
+    if (job.requiredRole === 'DOCTOR' && job.specialization) {
+      whereClause.specialization = job.specialization;
+    }
+    
     const compatibleStaff = await User.findAll({
-      where: {
-        role: job.requiredRole,
-        department: job.department,
-        specialization: job.specialization,
-        isActive: true
-      },
+      where: whereClause,
       attributes: ['id', 'firstName', 'lastName', 'email', 'department', 'specialization']
     });
 
+    console.log('🔍 DEBUG: Job created:', {
+      jobId: job.id,
+      requiredRole: job.requiredRole,
+      department: job.department,
+      specialization: job.specialization,
+      whereClause: whereClause,
+      compatibleStaffCount: compatibleStaff.length,
+      compatibleStaff: compatibleStaff.map(s => ({
+        id: s.id,
+        name: `${s.firstName} ${s.lastName}`,
+        role: s.role,
+        department: s.department,
+        specialization: s.specialization
+      }))
+    });
+
+    // Auto-create assignments for all compatible staff
+    const assignments = [];
+    if (compatibleStaff.length > 0) {
+      const assignmentPromises = compatibleStaff.map(staff => 
+        JobAssignment.create({
+          jobId: job.id,
+          userId: staff.id,
+          assignedBy: req.userId,
+          assignedAt: new Date(),
+          hourlyRate: job.hourlyRate,
+          status: 'PENDING',
+          isAutoAssigned: true
+        })
+      );
+      
+      const createdAssignments = await Promise.all(assignmentPromises);
+      assignments.push(...createdAssignments);
+      
+      console.log('✅ DEBUG: Assignments created:', {
+        jobId: job.id,
+        assignmentsCreated: createdAssignments.length,
+        assignments: createdAssignments.map(a => ({
+          id: a.id,
+          jobId: a.jobId,
+          userId: a.userId,
+          status: a.status
+        }))
+      });
+    } else {
+      console.log('❌ DEBUG: No compatible staff found for job:', job.id);
+    }
+
     res.status(201).json({
-      message: 'Job posted successfully',
+      message: 'Job posted successfully and auto-assigned to compatible staff',
       job,
       compatibleStaffCount: compatibleStaff.length,
+      assignmentsCreated: assignments.length,
       compatibleStaff: compatibleStaff.map(staff => ({
         id: staff.id,
         name: `${staff.firstName} ${staff.lastName}`,
@@ -390,8 +574,8 @@ router.post('/jobs/:id/assign', validate(schemas.jobAssignment), async (req, res
       });
     }
 
-    // Check specialization compatibility
-    if (user.specialization !== job.specialization) {
+    // Check specialization compatibility (only for doctors)
+    if (job.requiredRole === 'DOCTOR' && user.specialization !== job.specialization) {
       return res.status(400).json({
         error: 'Specialization mismatch',
         message: `User specialization (${user.specialization}) does not match job specialization (${job.specialization})`
@@ -657,6 +841,7 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
+
 // Get compatible staff for a job
 router.get('/jobs/:id/compatible-staff', async (req, res) => {
   try {
@@ -671,13 +856,19 @@ router.get('/jobs/:id/compatible-staff', async (req, res) => {
     }
 
     // Find all staff compatible with this job
+    const whereClause = {
+      role: job.requiredRole,
+      department: job.department,
+      isActive: true
+    };
+    
+    // For doctors, also match specialization
+    if (job.requiredRole === 'DOCTOR' && job.specialization) {
+      whereClause.specialization = job.specialization;
+    }
+    
     const compatibleStaff = await User.findAll({
-      where: {
-        role: job.requiredRole,
-        department: job.department,
-        specialization: job.specialization,
-        isActive: true
-      },
+      where: whereClause,
       attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'department', 'specialization', 'location'],
       order: [['firstName', 'ASC']]
     });
