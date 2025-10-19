@@ -11,6 +11,42 @@ const router = express.Router();
 // Apply authentication to all routes
 router.use(authenticate);
 
+// Get upcoming jobs for staff (today and tomorrow)
+router.get('/jobs/upcoming', async (req, res) => {
+  try {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfTomorrow = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59);
+
+    const upcomingJobs = await Job.findAll({
+      where: {
+        status: 'ACTIVE',
+        startDate: {
+          [Op.between]: [startOfToday, endOfTomorrow]
+        },
+        requiredRole: req.user.role
+      },
+      include: [
+        {
+          model: Hospital,
+          as: 'hospital',
+          attributes: ['name', 'address', 'contactInfo']
+        }
+      ],
+      order: [['startDate', 'ASC'], ['startTime', 'ASC']],
+      limit: 20
+    });
+
+    res.json(upcomingJobs);
+  } catch (error) {
+    console.error('Error fetching upcoming jobs:', error);
+    res.status(500).json({ error: 'Failed to fetch upcoming jobs' });
+  }
+});
+
 // Get available jobs for staff (doctors and nurses)
 router.get('/jobs/available', async (req, res) => {
   try {
@@ -103,7 +139,7 @@ router.get('/jobs/available', async (req, res) => {
         {
           model: JobAssignment,
           as: 'assignments',
-          attributes: ['id', 'status', 'assignedAt'],
+          attributes: ['id', 'status', 'createdAt'],
           include: [
             {
               model: User,
@@ -156,7 +192,7 @@ router.get('/jobs/:id', async (req, res) => {
         {
           model: JobAssignment,
           as: 'assignments',
-          attributes: ['id', 'status', 'assignedAt', 'acceptedAt', 'rejectedAt'],
+          attributes: ['id', 'status', 'createdAt', 'acceptedAt', 'rejectedAt'],
           include: [
             {
               model: User,
@@ -203,7 +239,7 @@ router.get('/assignments', async (req, res) => {
       page = 1, 
       limit = 5, 
       status,
-      sortBy = 'assignedAt',
+      sortBy = 'createdAt',
       sortOrder = 'DESC'
     } = req.query;
 
@@ -320,7 +356,7 @@ router.post('/assignments/:id/respond', validate(schemas.jobAcceptance), async (
       });
 
       res.json({
-        message: 'Job assignment accepted successfully. HR will review and select the final candidate.',
+        message: 'Job assignment accepted successfully. HR will review and assign the final candidate.',
         assignment
       });
     } else if (action === 'REJECT') {
@@ -350,7 +386,7 @@ router.get('/assignments/active', async (req, res) => {
     const activeAssignments = await JobAssignment.findAll({
       where: { 
         userId: req.userId,
-        status: ['ACCEPTED', 'IN_PROGRESS']
+        status: ['ASSIGNED', 'IN_PROGRESS']
       },
       include: [
         {
@@ -383,12 +419,12 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
       userId: req.userId
     });
 
-    // Verify assignment belongs to user and is confirmed (selected by HR)
+    // Verify assignment belongs to user and is assigned (confirmed by HR)
     const assignment = await JobAssignment.findOne({
       where: { 
         id: jobAssignmentId, 
         userId: req.userId,
-        status: 'ACCEPTED'
+        status: 'ASSIGNED'
       },
       include: [
         {
@@ -403,11 +439,11 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
       console.log('🔍 DEBUG: Assignment not found for check-in:', {
         jobAssignmentId,
         userId: req.userId,
-        status: 'ACCEPTED'
+        status: 'ASSIGNED'
       });
       return res.status(404).json({
         error: 'Assignment not found',
-        message: 'Assignment does not exist or is not confirmed by HR'
+        message: 'Assignment does not exist or is not assigned by HR'
       });
     }
 

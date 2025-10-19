@@ -39,6 +39,8 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/v1/auth', require('./routes/auth'));
 app.use('/api/v1/hr', require('./routes/hr'));
 app.use('/api/v1/staff', require('./routes/staff')); // Unified route for doctors and nurses
+app.use('/api/v1/doctor', require('./routes/doctor')); // Doctor-specific routes
+app.use('/api/v1/nurse', require('./routes/nurse')); // Nurse-specific routes
 app.use('/api/v1/jobs', require('./routes/jobs'));
 app.use('/api/v1/reports', require('./routes/reports'));
 app.use('/api/v1/permissions', require('./routes/permissions'));
@@ -74,8 +76,8 @@ app.use((err, req, res, next) => {
 // Initialize database and start server
 const startServer = async () => {
   try {
-    // Sync database models
-    await syncDatabase();
+    // Skip database sync to avoid key limit issues
+    console.log('ℹ️  Skipping database sync to avoid key limit issues.');
     
     // Start server
     app.listen(PORT, () => {

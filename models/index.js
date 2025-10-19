@@ -96,24 +96,12 @@ StaffPermission.belongsTo(User, { foreignKey: 'grantedBy', as: 'grantedByUser' }
 // Sync database
 const syncDatabase = async () => {
   try {
-    // Use alter: true for development to preserve data, force: true only for initial setup
-    const syncOptions = { alter: true };
+    // Use alter: false to avoid key limit issues, force: true only for initial setup
+    const syncOptions = { alter: false };
     await sequelize.sync(syncOptions);
     
-    // Add unique constraints after tables are created
-    try {
-      await sequelize.query(`
-        ALTER TABLE job_assignments 
-        ADD CONSTRAINT unique_job_user 
-        UNIQUE (jobId, userId)
-      `);
-      console.log('✅ Unique constraints added successfully.');
-    } catch (constraintError) {
-      // Constraint might already exist, which is fine
-      if (!constraintError.message.includes('Duplicate key name')) {
-        console.log('ℹ️  Unique constraint already exists or could not be added.');
-      }
-    }
+    // Skip adding unique constraints to avoid key limit issues
+    console.log('ℹ️  Skipping unique constraint addition to avoid key limit issues.');
     
     console.log('✅ Database models synchronized successfully.');
 

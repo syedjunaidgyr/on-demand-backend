@@ -29,7 +29,7 @@ router.get('/jobs/:id/accepted-assignments', async (req, res) => {
           attributes: ['id', 'firstName', 'lastName', 'email']
         }
       ],
-      order: [['acceptedAt', 'ASC']] // First to accept first
+      order: [['createdAt', 'ASC']] // First to accept first
     });
 
     res.json({
@@ -95,9 +95,10 @@ router.post('/jobs/:id/select-candidate', async (req, res) => {
       });
     }
 
-    // Confirm the selected assignment
+    // Confirm the selected assignment - HR assigns the job
     await selectedAssignment.update({ 
-      status: 'ACCEPTED'
+      status: 'ASSIGNED',
+      confirmedAt: new Date()
     });
 
     // Reject all other accepted assignments for this job
@@ -123,7 +124,7 @@ router.post('/jobs/:id/select-candidate', async (req, res) => {
     );
 
     res.json({
-      message: 'Candidate selected successfully',
+      message: 'Candidate assigned successfully. Staff can now check-in for the job.',
       selectedAssignment,
       jobStatus: 'ASSIGNED'
     });
@@ -273,7 +274,7 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
           jobId: job.id,
           userId: staff.id,
           assignedBy: req.userId,
-          assignedAt: new Date(),
+          createdAt: new Date(),
           hourlyRate: job.hourlyRate,
           status: 'PENDING',
           isAutoAssigned: true
@@ -619,7 +620,7 @@ router.post('/jobs/:id/assign', validate(schemas.jobAssignment), async (req, res
       jobId,
       userId,
       assignedBy: req.userId,
-      assignedAt: new Date(),
+      createdAt: new Date(),
       hourlyRate: hourlyRate || job.hourlyRate,
       notes,
       isDirectAssignment: true
@@ -663,7 +664,7 @@ router.get('/jobs/:id/assignments', async (req, res) => {
           order: [['checkInTime', 'DESC']]
         }
       ],
-      order: [['assignedAt', 'DESC']]
+      order: [['createdAt', 'DESC']]
     });
 
     res.json({ assignments });
@@ -709,8 +710,8 @@ router.get('/jobs/:id/status', async (req, res) => {
         id: a.id,
         user: a.user,
         status: a.status,
-        assignedAt: a.assignedAt,
-        acceptedAt: a.acceptedAt,
+        assignedAt: a.createdAt,
+        acceptedAt: a.createdAt,
         totalHours: a.totalHours,
         totalPayment: a.totalPayment
       }))
@@ -745,6 +746,7 @@ router.get('/dashboard', async (req, res) => {
     const totalAssignments = await JobAssignment.count();
     const pendingAssignments = await JobAssignment.count({ where: { status: 'PENDING' } });
     const acceptedAssignments = await JobAssignment.count({ where: { status: 'ACCEPTED' } });
+    const assignedAssignments = await JobAssignment.count({ where: { status: 'ASSIGNED' } });
     const inProgressAssignments = await JobAssignment.count({ where: { status: 'IN_PROGRESS' } });
     const completedAssignments = await JobAssignment.count({ where: { status: 'COMPLETED' } });
 
@@ -785,7 +787,7 @@ router.get('/dashboard', async (req, res) => {
 
     const recentAssignments = await JobAssignment.findAll({
       limit: 5,
-      order: [['assignedAt', 'DESC']],
+      order: [['createdAt', 'DESC']],
       include: [
         {
           model: User,
@@ -813,6 +815,7 @@ router.get('/dashboard', async (req, res) => {
         total: totalAssignments,
         pending: pendingAssignments,
         accepted: acceptedAssignments,
+        assigned: assignedAssignments,
         inProgress: inProgressAssignments,
         completed: completedAssignments
       },
