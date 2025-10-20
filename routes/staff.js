@@ -430,7 +430,7 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
         {
           model: Job,
           as: 'job',
-          attributes: ['id', 'title', 'status', 'startDate', 'endDate', 'startTime', 'endTime']
+          attributes: ['id', 'title', 'status', 'startDate', 'endDate', 'startTime', 'endTime', 'facilityName', 'location', 'facilityAddress', 'department', 'specialization']
         }
       ]
     });
@@ -480,11 +480,32 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
       });
     }
 
+    // Get user information for storing in check-in data
+    const user = await User.findByPk(req.userId, {
+      attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'department']
+    });
+
+    // Create check-in with facility information from job and user information
     const checkIn = await CheckIn.create({
       jobAssignmentId,
       userId: req.userId,
       checkInTime: new Date(),
-      checkInLocation: location,
+      checkInLocation: {
+        // User information
+        userId: user.id,
+        userName: `${user.firstName} ${user.lastName}`,
+        userEmail: user.email,
+        userRole: user.role,
+        userDepartment: user.department,
+        // Facility information
+        facilityName: assignment.job.facilityName,
+        location: assignment.job.location,
+        facilityAddress: assignment.job.facilityAddress,
+        department: assignment.job.department,
+        specialization: assignment.job.specialization,
+        jobTitle: assignment.job.title,
+        userLocation: location // Keep user's GPS location if provided
+      },
       status: 'CHECKED_IN',
       notes
     });
@@ -497,7 +518,23 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
 
     res.status(201).json({
       message: 'Checked in successfully',
-      checkIn
+      checkIn,
+      userInfo: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        department: user.department
+      },
+      jobContext: {
+        facilityName: assignment.job.facilityName,
+        location: assignment.job.location,
+        department: assignment.job.department,
+        specialization: assignment.job.specialization,
+        jobTitle: assignment.job.title,
+        facilityAddress: assignment.job.facilityAddress
+      }
     });
   } catch (error) {
     console.error('🔍 DEBUG: Check in error:', error);
@@ -540,7 +577,14 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
         id: jobAssignmentId, 
         userId: req.userId,
         status: 'IN_PROGRESS'
-      }
+      },
+      include: [
+        {
+          model: Job,
+          as: 'job',
+          attributes: ['id', 'title', 'facilityName', 'location', 'facilityAddress', 'department', 'specialization']
+        }
+      ]
     });
 
     if (!assignment) {
@@ -553,9 +597,29 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
     const checkOutTime = new Date();
     const workTime = Math.round((checkOutTime - checkIn.checkInTime) / (1000 * 60)); // minutes
 
+    // Get user information for storing in check-out data
+    const userForCheckOut = await User.findByPk(req.userId, {
+      attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'department']
+    });
+
     await checkIn.update({
       checkOutTime,
-      checkOutLocation: location,
+      checkOutLocation: {
+        // User information
+        userId: userForCheckOut.id,
+        userName: `${userForCheckOut.firstName} ${userForCheckOut.lastName}`,
+        userEmail: userForCheckOut.email,
+        userRole: userForCheckOut.role,
+        userDepartment: userForCheckOut.department,
+        // Facility information
+        facilityName: assignment.job.facilityName,
+        location: assignment.job.location,
+        facilityAddress: assignment.job.facilityAddress,
+        department: assignment.job.department,
+        specialization: assignment.job.specialization,
+        jobTitle: assignment.job.title,
+        userLocation: location // Keep user's GPS location if provided
+      },
       status: 'CHECKED_OUT',
       totalWorkTime: workTime,
       notes: notes || checkIn.notes
@@ -571,7 +635,23 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
     res.json({
       message: 'Checked out successfully',
       checkIn,
-      workTime: workTime
+      workTime: workTime,
+      userInfo: {
+        id: userForCheckOut.id,
+        firstName: userForCheckOut.firstName,
+        lastName: userForCheckOut.lastName,
+        email: userForCheckOut.email,
+        role: userForCheckOut.role,
+        department: userForCheckOut.department
+      },
+      jobContext: {
+        facilityName: assignment.job.facilityName,
+        location: assignment.job.location,
+        department: assignment.job.department,
+        specialization: assignment.job.specialization,
+        jobTitle: assignment.job.title,
+        facilityAddress: assignment.job.facilityAddress
+      }
     });
   } catch (error) {
     console.error('Check out error:', error);
