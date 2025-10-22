@@ -3,11 +3,49 @@ const { Op } = require('sequelize');
 const { User, Job, JobAssignment, CheckIn, Hospital } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
+const { isStaffCompatibleWithJob } = require('../utils/helpers');
+const { isCheckInAllowed } = require('../utils/dateTimeHelpers');
 
 const router = express.Router();
 
 // Apply authentication to all routes
 router.use(authenticate);
+
+// Get upcoming jobs for staff (today and tomorrow)
+router.get('/jobs/upcoming', async (req, res) => {
+  try {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfTomorrow = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59);
+
+    const upcomingJobs = await Job.findAll({
+      where: {
+        status: 'ACTIVE',
+        startDate: {
+          [Op.between]: [startOfToday, endOfTomorrow]
+        },
+        requiredRole: req.user.role
+      },
+      include: [
+        {
+          model: Hospital,
+          as: 'hospital',
+          attributes: ['name', 'address', 'contactInfo']
+        }
+      ],
+      order: [['startDate', 'ASC'], ['startTime', 'ASC']],
+      limit: 20
+    });
+
+    res.json(upcomingJobs);
+  } catch (error) {
+    console.error('Error fetching upcoming jobs:', error);
+    res.status(500).json({ error: 'Failed to fetch upcoming jobs' });
+  }
+});
 
 // Get available jobs for staff (doctors and nurses)
 router.get('/jobs/available', async (req, res) => {
@@ -29,11 +67,17 @@ router.get('/jobs/available', async (req, res) => {
     const offset = (page - 1) * limit;
     const whereClause = {
       requiredRole: req.user.role, // Filter by user's role (DOCTOR or NURSE)
+      department: req.user.department, // Filter by user's department
       status: 'ACTIVE',
       startDate: {
         [Op.gte]: new Date() // Only future jobs
       }
     };
+    
+    // For doctors, also filter by specialization
+    if (req.user.role === 'DOCTOR' && req.user.specialization) {
+      whereClause.specialization = req.user.specialization;
+    }
 
     // Get user's hospital and unit preferences
     const user = await User.findByPk(req.userId, {
@@ -95,7 +139,7 @@ router.get('/jobs/available', async (req, res) => {
         {
           model: JobAssignment,
           as: 'assignments',
-          attributes: ['id', 'status', 'assignedAt'],
+          attributes: ['id', 'status', 'createdAt'],
           include: [
             {
               model: User,
@@ -128,6 +172,66 @@ router.get('/jobs/available', async (req, res) => {
   }
 });
 
+// Get job details by ID for staff
+router.get('/jobs/:id', async (req, res) => {
+  try {
+    const jobId = req.params.id;
+    
+    const job = await Job.findByPk(jobId, {
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        },
+        {
+          model: Hospital,
+          as: 'hospital',
+          attributes: ['id', 'name', 'code', 'address']
+        },
+        {
+          model: JobAssignment,
+          as: 'assignments',
+          attributes: ['id', 'status', 'createdAt', 'acceptedAt', 'rejectedAt'],
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['firstName', 'lastName']
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!job) {
+      return res.status(404).json({
+        error: 'Job not found',
+        message: 'Job does not exist'
+      });
+    }
+
+    // Check if job is compatible with user's profile
+    const isCompatible = job.requiredRole === req.user.role && 
+                        job.department === req.user.department &&
+                        (job.requiredRole !== 'DOCTOR' || job.specialization === req.user.specialization);
+
+    res.json({
+      job,
+      isCompatible,
+      userRole: req.user.role,
+      userDepartment: req.user.department,
+      userSpecialization: req.user.specialization
+    });
+  } catch (error) {
+    console.error('Get job details error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch job details',
+      message: error.message
+    });
+  }
+});
+
 // Get user's job assignments
 router.get('/assignments', async (req, res) => {
   try {
@@ -135,7 +239,7 @@ router.get('/assignments', async (req, res) => {
       page = 1, 
       limit = 5, 
       status,
-      sortBy = 'assignedAt',
+      sortBy = 'createdAt',
       sortOrder = 'DESC'
     } = req.query;
 
@@ -194,6 +298,13 @@ router.post('/assignments/:id/respond', validate(schemas.jobAcceptance), async (
     const { action, rejectionReason } = req.body;
     const assignmentId = req.params.id;
 
+    console.log('🔍 DEBUG: Assignment response request:', {
+      assignmentId,
+      userId: req.userId,
+      action,
+      rejectionReason
+    });
+
     const assignment = await JobAssignment.findOne({
       where: { 
         id: assignmentId, 
@@ -204,12 +315,33 @@ router.post('/assignments/:id/respond', validate(schemas.jobAcceptance), async (
         {
           model: Job,
           as: 'job',
-          attributes: ['id', 'title', 'startDate', 'endDate']
+          attributes: ['id', 'title', 'startDate', 'endDate', 'startTime', 'endTime']
         }
       ]
     });
 
+    console.log('🔍 DEBUG: Assignment found:', assignment ? {
+      id: assignment.id,
+      jobId: assignment.jobId,
+      userId: assignment.userId,
+      status: assignment.status,
+      jobTitle: assignment.job?.title
+    } : 'No assignment found');
+
     if (!assignment) {
+      // Let's check if assignment exists but with different status
+      const anyAssignment = await JobAssignment.findOne({
+        where: { 
+          id: assignmentId, 
+          userId: req.userId
+        }
+      });
+      
+      console.log('🔍 DEBUG: Any assignment found:', anyAssignment ? {
+        id: anyAssignment.id,
+        status: anyAssignment.status
+      } : 'No assignment found at all');
+
       return res.status(404).json({
         error: 'Assignment not found',
         message: 'Assignment does not exist or is not pending'
@@ -217,16 +349,14 @@ router.post('/assignments/:id/respond', validate(schemas.jobAcceptance), async (
     }
 
     if (action === 'ACCEPT') {
+      // Accept the assignment
       await assignment.update({ 
         status: 'ACCEPTED',
         acceptedAt: new Date()
       });
-      
-      // Update job status if needed
-      await assignment.job.update({ status: 'ASSIGNED' });
 
       res.json({
-        message: 'Job assignment accepted successfully',
+        message: 'Job assignment accepted successfully. HR will review and assign the final candidate.',
         assignment
       });
     } else if (action === 'REJECT') {
@@ -256,7 +386,7 @@ router.get('/assignments/active', async (req, res) => {
     const activeAssignments = await JobAssignment.findAll({
       where: { 
         userId: req.userId,
-        status: ['ACCEPTED', 'IN_PROGRESS']
+        status: ['ASSIGNED', 'IN_PROGRESS']
       },
       include: [
         {
@@ -281,20 +411,56 @@ router.get('/assignments/active', async (req, res) => {
 router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
   try {
     const { jobAssignmentId, location, notes } = req.body;
+    
+    console.log('🔍 DEBUG: Check-in request:', {
+      jobAssignmentId,
+      location,
+      notes,
+      userId: req.userId
+    });
 
-    // Verify assignment belongs to user and is accepted
+    // Verify assignment belongs to user and is assigned (confirmed by HR)
     const assignment = await JobAssignment.findOne({
       where: { 
         id: jobAssignmentId, 
         userId: req.userId,
-        status: 'ACCEPTED'
-      }
+        status: 'ASSIGNED'
+      },
+      include: [
+        {
+          model: Job,
+          as: 'job',
+          attributes: ['id', 'title', 'status', 'startDate', 'endDate', 'startTime', 'endTime', 'facilityName', 'location', 'facilityAddress', 'department', 'specialization']
+        }
+      ]
     });
 
     if (!assignment) {
+      console.log('🔍 DEBUG: Assignment not found for check-in:', {
+        jobAssignmentId,
+        userId: req.userId,
+        status: 'ASSIGNED'
+      });
       return res.status(404).json({
         error: 'Assignment not found',
-        message: 'Assignment does not exist or is not accepted'
+        message: 'Assignment does not exist or is not assigned by HR'
+      });
+    }
+
+    // Job status validation removed - allow check-in for any job status
+
+    // Check if it's time to check in (job should be starting soon or has started)
+    const checkInResult = isCheckInAllowed(assignment.job.startDate, assignment.job.startTime, 2);
+    
+    if (!checkInResult.isAllowed) {
+      console.log('🔍 DEBUG: Too early to check in:', {
+        hoursUntilStart: checkInResult.hoursUntilStart,
+        jobStartTime: checkInResult.jobStartDateTime,
+        currentTime: checkInResult.currentTime
+      });
+      return res.status(400).json({
+        error: 'Too early to check in',
+        message: checkInResult.message
       });
     }
 
@@ -314,11 +480,32 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
       });
     }
 
+    // Get user information for storing in check-in data
+    const user = await User.findByPk(req.userId, {
+      attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'department']
+    });
+
+    // Create check-in with facility information from job and user information
     const checkIn = await CheckIn.create({
       jobAssignmentId,
       userId: req.userId,
       checkInTime: new Date(),
-      checkInLocation: location,
+      checkInLocation: {
+        // User information
+        userId: user.id,
+        userName: `${user.firstName} ${user.lastName}`,
+        userEmail: user.email,
+        userRole: user.role,
+        userDepartment: user.department,
+        // Facility information
+        facilityName: assignment.job.facilityName,
+        location: assignment.job.location,
+        facilityAddress: assignment.job.facilityAddress,
+        department: assignment.job.department,
+        specialization: assignment.job.specialization,
+        jobTitle: assignment.job.title,
+        userLocation: location // Keep user's GPS location if provided
+      },
       status: 'CHECKED_IN',
       notes
     });
@@ -331,10 +518,31 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
 
     res.status(201).json({
       message: 'Checked in successfully',
-      checkIn
+      checkIn,
+      userInfo: {
+        id: user.id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        department: user.department
+      },
+      jobContext: {
+        facilityName: assignment.job.facilityName,
+        location: assignment.job.location,
+        department: assignment.job.department,
+        specialization: assignment.job.specialization,
+        jobTitle: assignment.job.title,
+        facilityAddress: assignment.job.facilityAddress
+      }
     });
   } catch (error) {
-    console.error('Check in error:', error);
+    console.error('🔍 DEBUG: Check in error:', error);
+    console.error('🔍 DEBUG: Error details:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
     res.status(500).json({
       error: 'Failed to check in',
       message: error.message
@@ -363,19 +571,61 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
       });
     }
 
+    // Verify assignment is in IN_PROGRESS status
+    const assignment = await JobAssignment.findOne({
+      where: { 
+        id: jobAssignmentId, 
+        userId: req.userId,
+        status: 'IN_PROGRESS'
+      },
+      include: [
+        {
+          model: Job,
+          as: 'job',
+          attributes: ['id', 'title', 'facilityName', 'location', 'facilityAddress', 'department', 'specialization']
+        }
+      ]
+    });
+
+    if (!assignment) {
+      return res.status(400).json({
+        error: 'Invalid assignment status',
+        message: 'Cannot check out. Assignment is not in progress.'
+      });
+    }
+
     const checkOutTime = new Date();
     const workTime = Math.round((checkOutTime - checkIn.checkInTime) / (1000 * 60)); // minutes
 
+    // Get user information for storing in check-out data
+    const userForCheckOut = await User.findByPk(req.userId, {
+      attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'department']
+    });
+
     await checkIn.update({
       checkOutTime,
-      checkOutLocation: location,
+      checkOutLocation: {
+        // User information
+        userId: userForCheckOut.id,
+        userName: `${userForCheckOut.firstName} ${userForCheckOut.lastName}`,
+        userEmail: userForCheckOut.email,
+        userRole: userForCheckOut.role,
+        userDepartment: userForCheckOut.department,
+        // Facility information
+        facilityName: assignment.job.facilityName,
+        location: assignment.job.location,
+        facilityAddress: assignment.job.facilityAddress,
+        department: assignment.job.department,
+        specialization: assignment.job.specialization,
+        jobTitle: assignment.job.title,
+        userLocation: location // Keep user's GPS location if provided
+      },
       status: 'CHECKED_OUT',
       totalWorkTime: workTime,
       notes: notes || checkIn.notes
     });
 
-    // Update assignment
-    const assignment = await JobAssignment.findByPk(jobAssignmentId);
+    // Update assignment (we already have it from validation above)
     await assignment.update({
       status: 'COMPLETED',
       completedAt: checkOutTime,
@@ -385,7 +635,23 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
     res.json({
       message: 'Checked out successfully',
       checkIn,
-      workTime: workTime
+      workTime: workTime,
+      userInfo: {
+        id: userForCheckOut.id,
+        firstName: userForCheckOut.firstName,
+        lastName: userForCheckOut.lastName,
+        email: userForCheckOut.email,
+        role: userForCheckOut.role,
+        department: userForCheckOut.department
+      },
+      jobContext: {
+        facilityName: assignment.job.facilityName,
+        location: assignment.job.location,
+        department: assignment.job.department,
+        specialization: assignment.job.specialization,
+        jobTitle: assignment.job.title,
+        facilityAddress: assignment.job.facilityAddress
+      }
     });
   } catch (error) {
     console.error('Check out error:', error);

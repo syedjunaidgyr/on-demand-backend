@@ -24,7 +24,7 @@ const JobAssignment = sequelize.define('JobAssignment', {
     }
   },
   status: {
-    type: DataTypes.ENUM('PENDING', 'ACCEPTED', 'REJECTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'),
+    type: DataTypes.ENUM('PENDING', 'ACCEPTED', 'ASSIGNED', 'REJECTED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'),
     defaultValue: 'PENDING'
   },
   assignedBy: {
@@ -35,11 +35,11 @@ const JobAssignment = sequelize.define('JobAssignment', {
       key: 'id'
     }
   },
-  assignedAt: {
+  acceptedAt: {
     type: DataTypes.DATE,
     allowNull: true
   },
-  acceptedAt: {
+  confirmedAt: {
     type: DataTypes.DATE,
     allowNull: true
   },
@@ -128,6 +128,10 @@ JobAssignment.prototype.isPending = function() {
 
 JobAssignment.prototype.isAccepted = function() {
   return this.status === 'ACCEPTED';
+};
+
+JobAssignment.prototype.isAssigned = function() {
+  return this.status === 'ASSIGNED';
 };
 
 JobAssignment.prototype.isInProgress = function() {

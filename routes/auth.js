@@ -8,7 +8,7 @@ const router = express.Router();
 // Register new user
 router.post('/register', validate(schemas.userRegistration), async (req, res) => {
   try {
-    const { email, password, firstName, lastName, role, ...otherData } = req.body;
+    const { email, password, confirmPassword, firstName, lastName, role, ...otherData } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ where: { email } });
@@ -19,7 +19,7 @@ router.post('/register', validate(schemas.userRegistration), async (req, res) =>
       });
     }
 
-    // Create new user
+    // Create new user (confirmPassword is excluded from database save)
     const user = await User.create({
       email,
       password,
@@ -152,23 +152,9 @@ router.put('/profile', authenticate, validate(schemas.userUpdate), async (req, r
 });
 
 // Change password
-router.put('/change-password', authenticate, async (req, res) => {
+router.put('/change-password', authenticate, validate(schemas.passwordChange), async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        error: 'Missing required fields',
-        message: 'Current password and new password are required'
-      });
-    }
-
-    if (newPassword.length < 6) {
-      return res.status(400).json({
-        error: 'Invalid password',
-        message: 'New password must be at least 6 characters long'
-      });
-    }
+    const { currentPassword, newPassword, confirmPassword } = req.body;
 
     const user = await User.findByPk(req.userId);
     if (!user) {
@@ -187,7 +173,7 @@ router.put('/change-password', authenticate, async (req, res) => {
       });
     }
 
-    // Update password
+    // Update password (confirmPassword is excluded from database save)
     user.password = newPassword;
     await user.save();
 

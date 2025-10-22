@@ -502,7 +502,7 @@ router.post('/attendance', validate(schemas.reportGeneration), async (req, res) 
             {
               model: Job,
               as: 'job',
-              attributes: ['title', 'department', 'location', 'startTime', 'endTime']
+              attributes: ['title', 'department', 'location', 'startTime', 'endTime', 'facilityName', 'facilityAddress', 'specialization']
             }
           ]
         }

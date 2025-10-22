@@ -6,12 +6,17 @@ const schemas = {
   userRegistration: Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
+    confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
+      'any.only': 'Password confirmation does not match password'
+    }),
     firstName: Joi.string().min(2).max(100).required(),
     lastName: Joi.string().min(2).max(100).required(),
     phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
     role: Joi.string().valid('HR', 'DOCTOR', 'NURSE', 'ADMIN').required(),
     department: Joi.string().max(100).optional(),
     location: Joi.string().max(255).optional(),
+    hospitalId: Joi.number().integer().positive().optional(),
+    unitCode: Joi.string().max(50).optional(),
     specialization: Joi.string().max(255).optional(),
     licenseNumber: Joi.string().max(100).optional(),
     emergencyContact: Joi.object({
@@ -39,6 +44,8 @@ const schemas = {
     phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
     department: Joi.string().max(100).optional(),
     location: Joi.string().max(255).optional(),
+    hospitalId: Joi.number().integer().positive().optional(),
+    unitCode: Joi.string().max(50).optional(),
     specialization: Joi.string().max(255).optional(),
     licenseNumber: Joi.string().max(100).optional(),
     emergencyContact: Joi.object({
@@ -55,6 +62,14 @@ const schemas = {
     }).optional()
   }),
 
+  passwordChange: Joi.object({
+    currentPassword: Joi.string().required(),
+    newPassword: Joi.string().min(6).required(),
+    confirmPassword: Joi.string().valid(Joi.ref('newPassword')).required().messages({
+      'any.only': 'Password confirmation does not match new password'
+    })
+  }),
+
   // Job validation
   jobCreation: Joi.object({
     title: Joi.string().min(5).max(255).required(),
@@ -62,9 +77,15 @@ const schemas = {
     department: Joi.string().max(100).required(),
     location: Joi.string().max(255).required(),
     requiredRole: Joi.string().valid('DOCTOR', 'NURSE').required(),
-    specialization: Joi.string().max(255).optional(),
-    startDate: Joi.date().greater('now').required(),
-    endDate: Joi.date().greater(Joi.ref('startDate')).required(),
+    specialization: Joi.string().max(255).when('requiredRole', {
+      is: 'DOCTOR',
+      then: Joi.required().messages({
+        'any.required': 'Specialization is required for doctor jobs and must match the department'
+      }),
+      otherwise: Joi.optional()
+    }),
+    startDate: Joi.date().required(),
+    endDate: Joi.date().required(),
     startTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
     endTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).required(),
     hourlyRate: Joi.number().positive().required(),
@@ -72,6 +93,8 @@ const schemas = {
     maxAssignments: Joi.number().integer().min(1).optional(),
     requirements: Joi.object().optional(),
     benefits: Joi.object().optional(),
+    hospitalId: Joi.number().integer().positive().required(),
+    unitCode: Joi.string().max(50).required(),
     facilityName: Joi.string().max(255).required(),
     facilityAddress: Joi.object({
       street: Joi.string().required(),
@@ -98,8 +121,8 @@ const schemas = {
     location: Joi.string().max(255).optional(),
     requiredRole: Joi.string().valid('DOCTOR', 'NURSE').optional(),
     specialization: Joi.string().max(255).optional(),
-    startDate: Joi.date().greater('now').optional(),
-    endDate: Joi.date().greater(Joi.ref('startDate')).optional(),
+    startDate: Joi.date().optional(),
+    endDate: Joi.date().optional(),
     startTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
     endTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).optional(),
     hourlyRate: Joi.number().positive().optional(),
@@ -134,7 +157,6 @@ const schemas = {
   }),
 
   jobAcceptance: Joi.object({
-    assignmentId: Joi.number().integer().positive().required(),
     action: Joi.string().valid('ACCEPT', 'REJECT').required(),
     rejectionReason: Joi.string().when('action', {
       is: 'REJECT',
@@ -146,22 +168,28 @@ const schemas = {
   // Check-in validation
   checkIn: Joi.object({
     jobAssignmentId: Joi.number().integer().positive().required(),
-    location: Joi.object({
-      latitude: Joi.number().required(),
-      longitude: Joi.number().required(),
-      address: Joi.string().optional()
-    }).optional(),
-    notes: Joi.string().optional()
+    location: Joi.alternatives().try(
+      Joi.object({
+        latitude: Joi.number().required(),
+        longitude: Joi.number().required(),
+        address: Joi.string().optional()
+      }),
+      Joi.string().allow('')
+    ).optional(),
+    notes: Joi.string().allow('').optional()
   }),
 
   checkOut: Joi.object({
     jobAssignmentId: Joi.number().integer().positive().required(),
-    location: Joi.object({
-      latitude: Joi.number().required(),
-      longitude: Joi.number().required(),
-      address: Joi.string().optional()
-    }).optional(),
-    notes: Joi.string().optional()
+    location: Joi.alternatives().try(
+      Joi.object({
+        latitude: Joi.number().required(),
+        longitude: Joi.number().required(),
+        address: Joi.string().optional()
+      }),
+      Joi.string().allow('')
+    ).optional(),
+    notes: Joi.string().allow('').optional()
   }),
 
   // Extension request validation
@@ -204,18 +232,70 @@ const schemas = {
     endDate: Joi.date().optional(),
     minRate: Joi.number().positive().optional(),
     maxRate: Joi.number().positive().optional()
+  }),
+
+  // Hospital creation schema
+  hospitalCreation: Joi.object({
+    name: Joi.string().min(2).max(255).required(),
+    code: Joi.string().min(2).max(50).required(),
+    address: Joi.string().max(500).optional(),
+    city: Joi.string().max(100).optional(),
+    state: Joi.string().max(50).optional(),
+    zipCode: Joi.string().max(20).optional(),
+    country: Joi.string().max(100).optional(),
+    phone: Joi.string().max(20).optional(),
+    email: Joi.string().email().optional(),
+    website: Joi.string().uri().optional(),
+    isActive: Joi.boolean().default(true)
+  }),
+
+  // Hospital update schema
+  hospitalUpdate: Joi.object({
+    name: Joi.string().min(2).max(255).optional(),
+    code: Joi.string().min(2).max(50).optional(),
+    address: Joi.string().max(500).optional(),
+    city: Joi.string().max(100).optional(),
+    state: Joi.string().max(50).optional(),
+    zipCode: Joi.string().max(20).optional(),
+    country: Joi.string().max(100).optional(),
+    phone: Joi.string().max(20).optional(),
+    email: Joi.string().email().optional(),
+    website: Joi.string().uri().optional(),
+    isActive: Joi.boolean().optional()
+  }),
+
+  // Unit creation schema
+  unitCreation: Joi.object({
+    unitCode: Joi.string().min(2).max(50).required(),
+    unitName: Joi.string().min(2).max(255).required(),
+    isActive: Joi.boolean().default(true)
+  }),
+
+  // Unit update schema
+  unitUpdate: Joi.object({
+    unitCode: Joi.string().min(2).max(50).optional(),
+    unitName: Joi.string().min(2).max(255).optional(),
+    isActive: Joi.boolean().optional()
   })
 };
 
 // Validation middleware factory
 const validate = (schema, property = 'body') => {
   return (req, res, next) => {
+    console.log('🔍 DEBUG: Validation request:', {
+      property,
+      data: req[property],
+      schema: schema.describe().keys ? Object.keys(schema.describe().keys) : 'unknown'
+    });
+
     const { error, value } = schema.validate(req[property], {
       abortEarly: false,
       stripUnknown: true
     });
 
     if (error) {
+      console.log('❌ DEBUG: Validation failed:', error.details);
+      
       const errors = error.details.map(detail => ({
         field: detail.path.join('.'),
         message: detail.message
@@ -230,6 +310,30 @@ const validate = (schema, property = 'body') => {
     req[property] = value;
     next();
   };
+};
+
+// Department-Specialization mapping (same as frontend)
+const departmentSpecializations = {
+  'Emergency Medicine': ['Trauma Care', 'Critical Care', 'Accident & Emergency', 'Emergency Surgery'],
+  'General Medicine': ['Internal Medicine', 'Diabetology', 'Infectious Diseases', 'Geriatric Medicine'],
+  'General Surgery': ['Laparoscopic Surgery', 'Gastrointestinal Surgery', 'Hernia Repair', 'Breast Surgery'],
+  'Obstetrics & Gynecology': ['Obstetrics', 'Gynecology', 'Infertility', 'Maternal-Fetal Medicine'],
+  'Pediatrics': ['Neonatology', 'Pediatric Neurology', 'Pediatric Cardiology', 'Child Development'],
+  'Orthopedics': ['Joint Replacement', 'Sports Medicine', 'Spine Surgery', 'Trauma Orthopedics'],
+  'Cardiology': ['Interventional Cardiology', 'Non-Invasive Cardiology', 'Pediatric Cardiology', 'Cardiac Rehabilitation'],
+  'Neurology': ['Stroke', 'Epilepsy', 'Neurophysiology', 'Movement Disorders'],
+  'Urology': ['Andrology', 'Endourology', 'Pediatric Urology', 'Uro-Oncology'],
+  'Nephrology': ['Dialysis', 'Renal Transplant', 'Chronic Kidney Disease', 'Hypertension Management'],
+  'Gastroenterology': ['Hepatology', 'Pancreatology', 'Endoscopy', 'Liver Transplant'],
+  'Oncology': ['Medical Oncology', 'Radiation Oncology', 'Surgical Oncology', 'Hematologic Oncology'],
+  'ENT': ['Otology (Ear)', 'Rhinology (Nose)', 'Laryngology (Throat)', 'Head & Neck Surgery'],
+  'Ophthalmology': ['Cataract Surgery', 'Glaucoma', 'Retina', 'Cornea & Refractive Surgery'],
+  'Dermatology': ['Cosmetic Dermatology', 'Trichology', 'Clinical Dermatology', 'Venereology'],
+  'Psychiatry': ['Child Psychiatry', 'Addiction Psychiatry', 'Clinical Psychology', 'Geriatric Psychiatry'],
+  'Radiology': ['MRI', 'CT Scan', 'Ultrasound', 'Interventional Radiology'],
+  'Pathology': ['Histopathology', 'Cytopathology', 'Hematology', 'Clinical Pathology'],
+  'Anesthesiology': ['Cardiac Anesthesia', 'Neuroanesthesia', 'Pain Management', 'Critical Care Anesthesia'],
+  'Physiotherapy': ['Orthopedic Physiotherapy', 'Neurological Physiotherapy', 'Cardiopulmonary Physiotherapy', 'Sports Rehabilitation'],
 };
 
 // Custom validation functions
@@ -248,9 +352,36 @@ const validateTimeRange = (startTime, endTime) => {
   }
 };
 
+const validateDepartmentSpecialization = (department, specialization, requiredRole) => {
+  if (!department) {
+    return; // Let Joi handle required field validation
+  }
+  
+  // For nurses, specialization is optional, so skip validation if not provided
+  if (requiredRole === 'NURSE' && !specialization) {
+    return;
+  }
+  
+  // For doctors, specialization is required
+  if (requiredRole === 'DOCTOR' && !specialization) {
+    throw new Error('Specialization is required for doctor jobs');
+  }
+  
+  const validSpecializations = departmentSpecializations[department];
+  if (!validSpecializations) {
+    throw new Error(`Invalid department: ${department}`);
+  }
+  
+  if (specialization && !validSpecializations.includes(specialization)) {
+    throw new Error(`Specialization "${specialization}" is not valid for department "${department}". Valid specializations are: ${validSpecializations.join(', ')}`);
+  }
+};
+
 module.exports = {
   schemas,
   validate,
   validateDateRange,
-  validateTimeRange
+  validateTimeRange,
+  validateDepartmentSpecialization,
+  departmentSpecializations
 };

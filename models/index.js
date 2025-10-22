@@ -5,6 +5,7 @@ const JobAssignment = require('./JobAssignment');
 const CheckIn = require('./CheckIn');
 const Report = require('./Report');
 const Hospital = require('./Hospital');
+const Unit = require('./Unit');
 const Permission = require('./Permission');
 const HospitalPermission = require('./HospitalPermission');
 const UnitPermission = require('./UnitPermission');
@@ -18,6 +19,10 @@ User.belongsTo(Hospital, { foreignKey: 'hospitalId', as: 'hospital' });
 
 Hospital.hasMany(Job, { foreignKey: 'hospitalId', as: 'jobs' });
 Job.belongsTo(Hospital, { foreignKey: 'hospitalId', as: 'hospital' });
+
+// Unit associations (alias avoids collision with Hospital JSON field `units`)
+Hospital.hasMany(Unit, { foreignKey: 'hospitalId', as: 'unitMasters' });
+Unit.belongsTo(Hospital, { foreignKey: 'hospitalId', as: 'hospital' });
 
 // User and Job associations
 User.hasMany(Job, { foreignKey: 'createdBy', as: 'createdJobs' });
@@ -91,26 +96,34 @@ StaffPermission.belongsTo(User, { foreignKey: 'grantedBy', as: 'grantedByUser' }
 // Sync database
 const syncDatabase = async () => {
   try {
-    // Use alter: true for development to preserve data, force: true only for initial setup
-    const syncOptions = { alter: true };
+    // Use alter: false to avoid key limit issues, force: true only for initial setup
+    const syncOptions = { alter: false };
     await sequelize.sync(syncOptions);
     
-    // Add unique constraints after tables are created
-    try {
-      await sequelize.query(`
-        ALTER TABLE job_assignments 
-        ADD CONSTRAINT unique_job_user 
-        UNIQUE (jobId, userId)
-      `);
-      console.log('✅ Unique constraints added successfully.');
-    } catch (constraintError) {
-      // Constraint might already exist, which is fine
-      if (!constraintError.message.includes('Duplicate key name')) {
-        console.log('ℹ️  Unique constraint already exists or could not be added.');
-      }
-    }
+    // Skip adding unique constraints to avoid key limit issues
+    console.log('ℹ️  Skipping unique constraint addition to avoid key limit issues.');
     
     console.log('✅ Database models synchronized successfully.');
+
+    // Bootstrap Unit master from Hospital.units JSON if Units are empty
+    const [unitsCountResult] = await sequelize.query('SELECT COUNT(*) as count FROM units');
+    const unitsCount = Array.isArray(unitsCountResult) ? unitsCountResult[0].count : unitsCountResult.count;
+    if (Number(unitsCount) === 0) {
+      const hospitals = await Hospital.findAll();
+      const unitsToCreate = [];
+      for (const hospital of hospitals) {
+        const jsonUnits = hospital.units || [];
+        for (const u of jsonUnits) {
+          if (u && u.code && u.name) {
+            unitsToCreate.push({ hospitalId: hospital.id, unitCode: u.code, unitName: u.name, isActive: true });
+          }
+        }
+      }
+      if (unitsToCreate.length > 0) {
+        await Unit.bulkCreate(unitsToCreate, { ignoreDuplicates: true });
+        console.log(`✅ Bootstrapped ${unitsToCreate.length} unit records from Hospital JSON.`);
+      }
+    }
   } catch (error) {
     console.error('❌ Error synchronizing database models:', error);
     throw error;
@@ -125,6 +138,7 @@ module.exports = {
   CheckIn,
   Report,
   Hospital,
+  Unit,
   Permission,
   HospitalPermission,
   UnitPermission,
