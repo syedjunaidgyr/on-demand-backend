@@ -276,6 +276,28 @@ const schemas = {
     unitCode: Joi.string().min(2).max(50).optional(),
     unitName: Joi.string().min(2).max(255).optional(),
     isActive: Joi.boolean().optional()
+  }),
+
+  // Break start schema
+  breakStart: Joi.object({
+    jobAssignmentId: Joi.number().integer().positive().required(),
+    location: Joi.object({
+      latitude: Joi.number().optional(),
+      longitude: Joi.number().optional(),
+      address: Joi.string().optional()
+    }).optional(),
+    notes: Joi.string().max(500).optional()
+  }),
+
+  // Break end schema
+  breakEnd: Joi.object({
+    jobAssignmentId: Joi.number().integer().positive().required(),
+    location: Joi.object({
+      latitude: Joi.number().optional(),
+      longitude: Joi.number().optional(),
+      address: Joi.string().optional()
+    }).optional(),
+    notes: Joi.string().max(500).optional()
   })
 };
 

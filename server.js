@@ -43,6 +43,9 @@ app.use('/api/v1/doctor', require('./routes/doctor')); // Doctor-specific routes
 app.use('/api/v1/nurse', require('./routes/nurse')); // Nurse-specific routes
 app.use('/api/v1/jobs', require('./routes/jobs'));
 app.use('/api/v1/reports', require('./routes/reports'));
+app.use('/api/v1/tracking', require('./routes/tracking')); // Real-time tracking routes
+app.use('/api/v1/financial', require('./routes/financial')); // Financial dashboard routes
+app.use('/api/v1/performance', require('./routes/performance')); // Performance analytics routes
 app.use('/api/v1/permissions', require('./routes/permissions'));
 app.use('/api/v1/admin', require('./routes/admin')); // Admin routes for hospital/unit management
 app.use('/api/v1/public', require('./routes/public')); // Public routes (no auth required)

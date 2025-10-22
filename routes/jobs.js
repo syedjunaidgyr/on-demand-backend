@@ -67,6 +67,12 @@ router.get('/search', optionalAuth, validate(schemas.pagination, 'query'), async
 
     const { count, rows: jobs } = await Job.findAndCountAll({
       where: whereClause,
+      attributes: [
+        'id', 'title', 'description', 'department', 'location', 'requiredRole', 
+        'specialization', 'startDate', 'endDate', 'startTime', 'endTime', 
+        'hourlyRate', 'status', 'priority', 'maxAssignments', 'facilityName', 
+        'facilityAddress', 'createdBy', 'hospitalId', 'unitCode', 'createdAt', 'updatedAt'
+      ],
       include: [
         {
           model: User,
@@ -91,8 +97,21 @@ router.get('/search', optionalAuth, validate(schemas.pagination, 'query'), async
       order: [[sortBy, sortOrder]]
     });
 
+    // Transform jobs to include currentAssignments count
+    const transformedJobs = jobs.map(job => {
+      const jobData = job.toJSON();
+      const currentAssignments = jobData.assignments.filter(assignment => 
+        ['ACCEPTED', 'ASSIGNED', 'IN_PROGRESS'].includes(assignment.status)
+      ).length;
+      
+      return {
+        ...jobData,
+        currentAssignments
+      };
+    });
+
     res.json({
-      jobs,
+      jobs: transformedJobs,
       pagination: {
         total: count,
         page: parseInt(page),

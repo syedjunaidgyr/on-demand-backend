@@ -1,0 +1,919 @@
+{
+  "info": {
+    "name": "Healthcare Locum Demo Features",
+    "description": "Comprehensive collection for the 4 main demo features of the Healthcare Locum Backend API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "jobId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "assignmentId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "Register HR User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"hr@demo.com\",\n  \"password\": \"password123\",\n  \"confirmPassword\": \"password123\",\n  \"firstName\": \"HR\",\n  \"lastName\": \"Manager\",\n  \"role\": \"HR\",\n  \"department\": \"Human Resources\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Register Doctor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"doctor@demo.com\",\n  \"password\": \"password123\",\n  \"confirmPassword\": \"password123\",\n  \"firstName\": \"Dr. John\",\n  \"lastName\": \"Smith\",\n  \"role\": \"DOCTOR\",\n  \"department\": \"Emergency Medicine\",\n  \"specialization\": \"Emergency Medicine\",\n  \"licenseNumber\": \"MD123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Register Nurse",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nurse@demo.com\",\n  \"password\": \"password123\",\n  \"confirmPassword\": \"password123\",\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"role\": \"NURSE\",\n  \"department\": \"ICU\",\n  \"licenseNumber\": \"RN789012\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login HR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.token);",
+                  "    pm.collectionVariables.set('userId', response.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"hr@demo.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Login Doctor",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.token);",
+                  "    pm.collectionVariables.set('userId', response.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"doctor@demo.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Login Nurse",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('authToken', response.token);",
+                  "    pm.collectionVariables.set('userId', response.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nurse@demo.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "🏥 Demo Feature 1: Job Management & Assignment Flow",
+      "item": [
+        {
+          "name": "Create Hospital",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"City General Hospital\",\n  \"code\": \"CGH001\",\n  \"address\": {\n    \"street\": \"123 Medical Center Dr\",\n    \"city\": \"New York\",\n    \"state\": \"NY\",\n    \"zipCode\": \"10001\",\n    \"country\": \"USA\"\n  },\n  \"phone\": \"+1-555-0123\",\n  \"email\": \"info@citygeneral.com\",\n  \"website\": \"https://citygeneral.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/hospitals",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "hospitals"]
+            }
+          }
+        },
+        {
+          "name": "Create Unit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unitCode\": \"ICU\",\n  \"unitName\": \"Intensive Care Unit\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/hospitals/1/units",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "hospitals", "1", "units"]
+            }
+          }
+        },
+        {
+          "name": "Create Job Posting",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('jobId', response.job.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Emergency ICU Coverage - Night Shift\",\n  \"description\": \"Urgent coverage needed for ICU night shift. Must have ICU experience and be available immediately.\",\n  \"department\": \"Emergency Medicine\",\n  \"location\": \"New York, NY\",\n  \"requiredRole\": \"DOCTOR\",\n  \"specialization\": \"Emergency Medicine\",\n  \"startDate\": \"2024-01-15\",\n  \"endDate\": \"2024-01-15\",\n  \"startTime\": \"22:00:00\",\n  \"endTime\": \"06:00:00\",\n  \"hourlyRate\": 150.00,\n  \"priority\": \"URGENT\",\n  \"maxAssignments\": 1,\n  \"hospitalId\": 1,\n  \"unitCode\": \"ICU\",\n  \"facilityName\": \"City General Hospital\",\n  \"facilityAddress\": {\n    \"street\": \"123 Medical Center Dr\",\n    \"city\": \"New York\",\n    \"state\": \"NY\",\n    \"zipCode\": \"10001\"\n  },\n  \"requirements\": [\"ICU certification\", \"Emergency medicine experience\"],\n  \"benefits\": [\"Competitive rate\", \"Overtime pay\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hr/jobs",
+              "host": ["{{baseUrl}}"],
+              "path": ["hr", "jobs"]
+            }
+          }
+        },
+        {
+          "name": "Get Job Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hr/jobs/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["hr", "jobs", "{{jobId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Compatible Staff",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hr/jobs/{{jobId}}/compatible-staff",
+              "host": ["{{baseUrl}}"],
+              "path": ["hr", "jobs", "{{jobId}}", "compatible-staff"]
+            }
+          }
+        },
+        {
+          "name": "Get Accepted Assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hr/jobs/{{jobId}}/accepted-assignments",
+              "host": ["{{baseUrl}}"],
+              "path": ["hr", "jobs", "{{jobId}}", "accepted-assignments"]
+            }
+          }
+        },
+        {
+          "name": "Select Final Candidate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('assignmentId', response.selectedAssignment.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignmentId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/hr/jobs/{{jobId}}/select-candidate",
+              "host": ["{{baseUrl}}"],
+              "path": ["hr", "jobs", "{{jobId}}", "select-candidate"]
+            }
+          }
+        },
+        {
+          "name": "Get Job Status Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hr/jobs/{{jobId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["hr", "jobs", "{{jobId}}", "status"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📱 Demo Feature 2: Real-time Check-in/Check-out System",
+      "item": [
+        {
+          "name": "Get Available Jobs (Staff View)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/staff/jobs/available?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["staff", "jobs", "available"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Job Details (Staff View)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/staff/jobs/{{jobId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["staff", "jobs", "{{jobId}}"]
+            }
+          }
+        },
+        {
+          "name": "Accept Job Assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"ACCEPT\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/staff/assignments/{{assignmentId}}/respond",
+              "host": ["{{baseUrl}}"],
+              "path": ["staff", "assignments", "{{assignmentId}}", "respond"]
+            }
+          }
+        },
+        {
+          "name": "Get Active Assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/staff/assignments/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["staff", "assignments", "active"]
+            }
+          }
+        },
+        {
+          "name": "Check In",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobAssignmentId\": {{assignmentId}},\n  \"location\": {\n    \"latitude\": 40.7128,\n    \"longitude\": -74.0060,\n    \"address\": \"City General Hospital, New York, NY\"\n  },\n  \"notes\": \"Starting night shift in ICU\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/staff/check-in",
+              "host": ["{{baseUrl}}"],
+              "path": ["staff", "check-in"]
+            }
+          }
+        },
+        {
+          "name": "Start Break",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobAssignmentId\": {{assignmentId}},\n  \"location\": {\n    \"latitude\": 40.7128,\n    \"longitude\": -74.0060\n  },\n  \"notes\": \"Taking 30-minute break\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tracking/break/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["tracking", "break", "start"]
+            }
+          }
+        },
+        {
+          "name": "End Break",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobAssignmentId\": {{assignmentId}},\n  \"location\": {\n    \"latitude\": 40.7128,\n    \"longitude\": -74.0060\n  },\n  \"notes\": \"Break completed, returning to work\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tracking/break/end",
+              "host": ["{{baseUrl}}"],
+              "path": ["tracking", "break", "end"]
+            }
+          }
+        },
+        {
+          "name": "Check Out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jobAssignmentId\": {{assignmentId}},\n  \"location\": {\n    \"latitude\": 40.7128,\n    \"longitude\": -74.0060,\n    \"address\": \"City General Hospital, New York, NY\"\n  },\n  \"notes\": \"Night shift completed successfully\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/staff/check-out",
+              "host": ["{{baseUrl}}"],
+              "path": ["staff", "check-out"]
+            }
+          }
+        },
+        {
+          "name": "Get Current Shift Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tracking/staff/{{userId}}/current-shift",
+              "host": ["{{baseUrl}}"],
+              "path": ["tracking", "staff", "{{userId}}", "current-shift"]
+            }
+          }
+        },
+        {
+          "name": "Get Real-time Staff Locations (HR)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tracking/staff/locations",
+              "host": ["{{baseUrl}}"],
+              "path": ["tracking", "staff", "locations"]
+            }
+          }
+        },
+        {
+          "name": "Get Real-time Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tracking/dashboard/realtime",
+              "host": ["{{baseUrl}}"],
+              "path": ["tracking", "dashboard", "realtime"]
+            }
+          }
+        },
+        {
+          "name": "Get Attendance Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tracking/attendance/summary?startDate=2024-01-01&endDate=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["tracking", "attendance", "summary"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-01-31"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "💰 Demo Feature 3: Financial Dashboard & Reports",
+      "item": [
+        {
+          "name": "Get Financial Dashboard Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/financial/dashboard?startDate=2024-01-01&endDate=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["financial", "dashboard"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-01-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Payment Summary by User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/financial/payments/user/{{userId}}?startDate=2024-01-01&endDate=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["financial", "payments", "user", "{{userId}}"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-01-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Cost Analysis by Department",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/financial/cost-analysis/department?startDate=2024-01-01&endDate=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["financial", "cost-analysis", "department"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-01-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Budget Analysis",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/financial/budget-analysis?startDate=2024-01-01&endDate=2024-01-31&budget=50000",
+              "host": ["{{baseUrl}}"],
+              "path": ["financial", "budget-analysis"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-01-31"
+                },
+                {
+                  "key": "budget",
+                  "value": "50000"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Generate Financial Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Monthly Financial Report - January 2024\",\n  \"type\": \"FINANCIAL\",\n  \"parameters\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-01-31\",\n    \"department\": \"Emergency Medicine\"\n  },\n  \"fileFormat\": \"JSON\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reports/financial",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "financial"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📊 Demo Feature 4: Staff Performance Analytics",
+      "item": [
+        {
+          "name": "Get Performance Dashboard Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/performance/dashboard?startDate=2024-01-01&endDate=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["performance", "dashboard"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-01-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Individual Staff Performance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/performance/staff/{{userId}}?startDate=2024-01-01&endDate=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["performance", "staff", "{{userId}}"],
+              "query": [
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-01-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Performance Comparison",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/performance/comparison?userIds=1&userIds=2&userIds=3&metric=rating&startDate=2024-01-01&endDate=2024-01-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["performance", "comparison"],
+              "query": [
+                {
+                  "key": "userIds",
+                  "value": "1"
+                },
+                {
+                  "key": "userIds",
+                  "value": "2"
+                },
+                {
+                  "key": "userIds",
+                  "value": "3"
+                },
+                {
+                  "key": "metric",
+                  "value": "rating"
+                },
+                {
+                  "key": "startDate",
+                  "value": "2024-01-01"
+                },
+                {
+                  "key": "endDate",
+                  "value": "2024-01-31"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Generate Staff Performance Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Staff Performance Report - January 2024\",\n  \"type\": \"STAFF_PERFORMANCE\",\n  \"parameters\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-01-31\",\n    \"role\": \"DOCTOR\"\n  },\n  \"fileFormat\": \"JSON\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reports/staff-performance",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "staff-performance"]
+            }
+          }
+        },
+        {
+          "name": "Generate Attendance Report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Attendance Report - January 2024\",\n  \"type\": \"ATTENDANCE\",\n  \"parameters\": {\n    \"startDate\": \"2024-01-01\",\n    \"endDate\": \"2024-01-31\",\n    \"department\": \"Emergency Medicine\"\n  },\n  \"fileFormat\": \"JSON\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reports/attendance",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "attendance"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "📈 Additional Demo Features",
+      "item": [
+        {
+          "name": "Get HR Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hr/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["hr", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "Get Staff Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/staff/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["staff", "status"]
+            }
+          }
+        },
+        {
+          "name": "Get Job Statistics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/jobs/stats/overview",
+              "host": ["{{baseUrl}}"],
+              "path": ["jobs", "stats", "overview"]
+            }
+          }
+        },
+        {
+          "name": "Get All Reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Report by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "1"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
