@@ -469,19 +469,20 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
     // Job status validation removed - allow check-in for any job status
 
     // Check if it's time to check in (job should be starting soon or has started)
-    const checkInResult = isCheckInAllowed(assignment.job.startDate, assignment.job.startTime, 2);
+    // TODO: Temporarily disabled for testing - allow check-in at any time
+    // const checkInResult = isCheckInAllowed(assignment.job.startDate, assignment.job.startTime, 2);
     
-    if (!checkInResult.isAllowed) {
-      console.log('🔍 DEBUG: Too early to check in:', {
-        hoursUntilStart: checkInResult.hoursUntilStart,
-        jobStartTime: checkInResult.jobStartDateTime,
-        currentTime: checkInResult.currentTime
-      });
-      return res.status(400).json({
-        error: 'Too early to check in',
-        message: checkInResult.message
-      });
-    }
+    // if (!checkInResult.isAllowed) {
+    //   console.log('🔍 DEBUG: Too early to check in:', {
+    //     hoursUntilStart: checkInResult.hoursUntilStart,
+    //     jobStartTime: checkInResult.jobStartDateTime,
+    //     currentTime: checkInResult.currentTime
+    //   });
+    //   return res.status(400).json({
+    //     error: 'Too early to check in',
+    //     message: checkInResult.message
+    //   });
+    // }
 
     // Check if already checked in
     const existingCheckIn = await CheckIn.findOne({
