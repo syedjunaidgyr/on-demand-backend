@@ -14,9 +14,10 @@ router.use(authorize('HR', 'ADMIN'));
 router.post('/job-postings', validate(schemas.reportGeneration), async (req, res) => {
   try {
     const { title, parameters, fileFormat = 'JSON' } = req.body;
-    const { startDate, endDate, department, location, status, createdBy } = parameters || {};
+    const { startDate, endDate, department, location, status, createdBy, jobId } = parameters || {};
 
     const whereClause = {};
+    if (jobId) whereClause.id = jobId;
     if (startDate) whereClause.createdAt = { [Op.gte]: startDate };
     if (endDate) whereClause.createdAt = { ...whereClause.createdAt, [Op.lte]: endDate };
     if (department) whereClause.department = department;
@@ -35,7 +36,7 @@ router.post('/job-postings', validate(schemas.reportGeneration), async (req, res
         {
           model: JobAssignment,
           as: 'assignments',
-          attributes: ['id', 'status', 'assignedAt', 'acceptedAt', 'totalHours', 'totalPayment'],
+          attributes: ['id', 'status', 'startedAt', 'acceptedAt', 'totalHours', 'totalPayment'],
           include: [
             {
               model: User,
@@ -115,8 +116,8 @@ router.post('/job-assignments', validate(schemas.reportGeneration), async (req, 
     const { startDate, endDate, status, userId, jobId } = parameters || {};
 
     const whereClause = {};
-    if (startDate) whereClause.assignedAt = { [Op.gte]: startDate };
-    if (endDate) whereClause.assignedAt = { ...whereClause.assignedAt, [Op.lte]: endDate };
+    if (startDate) whereClause.startedAt = { [Op.gte]: startDate };
+    if (endDate) whereClause.startedAt = { ...whereClause.startedAt, [Op.lte]: endDate };
     if (status) whereClause.status = status;
     if (userId) whereClause.userId = userId;
     if (jobId) whereClause.jobId = jobId;
@@ -145,7 +146,7 @@ router.post('/job-assignments', validate(schemas.reportGeneration), async (req, 
           order: [['checkInTime', 'DESC']]
         }
       ],
-      order: [['assignedAt', 'DESC']]
+      order: [['startedAt', 'DESC']]
     });
 
     const summary = {
@@ -606,6 +607,115 @@ router.post('/attendance', validate(schemas.reportGeneration), async (req, res) 
     console.error('Attendance report error:', error);
     res.status(500).json({
       error: 'Failed to generate attendance report',
+      message: error.message
+    });
+  }
+});
+
+// Generate no-show jobs report
+router.post('/no-show-jobs', validate(schemas.reportGeneration), async (req, res) => {
+  try {
+    const { title, parameters, fileFormat = 'JSON' } = req.body;
+    const { startDate, endDate, department, location } = parameters || {};
+
+    const whereClause = {
+      status: { [Op.in]: ['ACCEPTED', 'ASSIGNED', 'PENDING'] }
+    };
+    
+    if (startDate) whereClause.acceptedAt = { [Op.gte]: startDate };
+    if (endDate) whereClause.acceptedAt = { ...whereClause.acceptedAt, [Op.lte]: endDate };
+
+    const assignments = await JobAssignment.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: Job,
+          as: 'job',
+          where: {
+            ...(department && { department }),
+            ...(location && { location: { [Op.like]: `%${location}%` } })
+          },
+          attributes: ['id', 'title', 'department', 'location', 'startDate', 'startTime', 'endTime', 'hourlyRate']
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'department']
+        },
+        {
+          model: CheckIn,
+          as: 'checkIns',
+          required: false,
+          attributes: ['id', 'checkInTime']
+        }
+      ]
+    });
+
+    // Filter for assignments with no check-ins
+    const noShowAssignments = assignments.filter(assignment => 
+      !assignment.checkIns || assignment.checkIns.length === 0
+    );
+
+    const summary = {
+      totalNoShows: noShowAssignments.length,
+      byDepartment: {},
+      byRole: {},
+      totalExpectedPayment: 0,
+      averageHoursMissed: 0
+    };
+
+    noShowAssignments.forEach(assignment => {
+      const department = assignment.job.department;
+      const role = assignment.user.role;
+
+      // Department summary
+      summary.byDepartment[department] = (summary.byDepartment[department] || 0) + 1;
+      
+      // Role summary
+      summary.byRole[role] = (summary.byRole[role] || 0) + 1;
+
+      // Calculate expected payment
+      if (assignment.hourlyRate) {
+        const jobStart = new Date(assignment.job.startDate);
+        const now = new Date();
+        if (jobStart <= now) {
+          const hoursDiff = (now - jobStart) / (1000 * 60 * 60);
+          summary.totalExpectedPayment += (hoursDiff * assignment.hourlyRate);
+        }
+      }
+    });
+
+    if (noShowAssignments.length > 0) {
+      summary.averageHoursMissed = Math.round((summary.totalExpectedPayment / noShowAssignments.length) * 100) / 100;
+    }
+
+    const report = await Report.create({
+      title,
+      type: 'JOB_ASSIGNMENTS',
+      generatedBy: req.userId,
+      parameters: { ...parameters, reportSubType: 'NO_SHOW' },
+      data: noShowAssignments,
+      summary,
+      status: 'COMPLETED',
+      fileFormat,
+      generatedAt: new Date()
+    });
+
+    res.json({
+      message: 'No-show jobs report generated successfully',
+      report: {
+        id: report.id,
+        title: report.title,
+        type: 'NO_SHOW_JOBS',
+        summary,
+        totalRecords: noShowAssignments.length,
+        generatedAt: report.generatedAt
+      }
+    });
+  } catch (error) {
+    console.error('No-show jobs report error:', error);
+    res.status(500).json({
+      error: 'Failed to generate no-show jobs report',
       message: error.message
     });
   }

@@ -252,24 +252,22 @@ router.get('/jobs/:id', async (req, res) => {
 });
 
 // Get user's job assignments
+// Get all assignments (returns ALL assignments without pagination)
 router.get('/assignments', async (req, res) => {
   try {
     const { 
-      page = 1, 
-      limit = 5, 
       status,
       sortBy = 'createdAt',
       sortOrder = 'DESC'
     } = req.query;
 
-    const offset = (page - 1) * limit;
     const whereClause = { userId: req.userId };
 
     if (status) {
       whereClause.status = status;
     }
 
-    const { count, rows: assignments } = await JobAssignment.findAndCountAll({
+    const assignments = await JobAssignment.findAll({
       where: whereClause,
       include: [
         {
@@ -288,24 +286,68 @@ router.get('/assignments', async (req, res) => {
           attributes: ['id', 'checkInTime', 'checkOutTime', 'status', 'totalWorkTime', 'isLate', 'isEarlyCheckout']
         }
       ],
-      order: [[sortBy, sortOrder.toUpperCase()]],
-      limit: parseInt(limit),
-      offset: parseInt(offset)
+      order: [[sortBy, sortOrder.toUpperCase()]]
     });
 
     res.json({
       assignments,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(count / limit)
-      }
+      total: assignments.length
     });
   } catch (error) {
     console.error('Get assignments error:', error);
     res.status(500).json({
       error: 'Failed to fetch assignments',
+      message: error.message
+    });
+  }
+});
+
+// Get assignment by ID
+router.get('/assignments/:id', async (req, res) => {
+  try {
+    const assignmentId = req.params.id;
+
+    const assignment = await JobAssignment.findOne({
+      where: { 
+        id: assignmentId,
+        userId: req.userId // Ensure user can only access their own assignments
+      },
+      include: [
+        {
+          model: Job,
+          as: 'job',
+          attributes: ['id', 'title', 'description', 'department', 'location', 'requiredRole', 'specialization', 'startDate', 'endDate', 'startTime', 'endTime', 'hourlyRate', 'status', 'priority', 'maxAssignments', 'facilityName', 'facilityAddress', 'hospitalId', 'unitCode']
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'role', 'department', 'specialization']
+        },
+        {
+          model: User,
+          as: 'assigner',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        },
+        {
+          model: CheckIn,
+          as: 'checkIns',
+          order: [['checkInTime', 'DESC']]
+        }
+      ]
+    });
+
+    if (!assignment) {
+      return res.status(404).json({
+        error: 'Assignment not found',
+        message: 'Assignment does not exist or you do not have access to it'
+      });
+    }
+
+    res.json({ assignment });
+  } catch (error) {
+    console.error('Get assignment error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch assignment',
       message: error.message
     });
   }

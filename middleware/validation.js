@@ -209,7 +209,7 @@ const schemas = {
       'ATTENDANCE',
       'UTILIZATION',
       'CUSTOM'
-    ).required(),
+    ).optional(),
     parameters: Joi.object().optional(),
     fileFormat: Joi.string().valid('JSON', 'CSV', 'PDF', 'EXCEL').optional()
   }),
