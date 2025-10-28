@@ -380,23 +380,17 @@ router.get('/attendance/summary', async (req, res) => {
 router.get('/dashboard/realtime', authorize('HR', 'ADMIN'), async (req, res) => {
   try {
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // Active staff currently on shift
+    // Active staff currently on shift (all-time, no date constraint)
     const activeStaff = await CheckIn.findAll({
       where: {
-        status: 'CHECKED_IN',
-        checkInTime: {
-          [Op.gte]: today
-        }
+        status: 'CHECKED_IN'
       },
       include: [
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'firstName', 'lastName', 'role', 'department']
+          attributes: ['id', 'firstName', 'lastName', 'role', 'department', 'specialization', 'hospitalId', 'unitCode']
         },
         {
           model: JobAssignment,
@@ -405,48 +399,78 @@ router.get('/dashboard/realtime', authorize('HR', 'ADMIN'), async (req, res) => 
             {
               model: Job,
               as: 'job',
-              attributes: ['id', 'title', 'department', 'location', 'facilityName']
+              attributes: ['id', 'title', 'department', 'location', 'facilityName', 'hospitalId', 'unitCode', 'specialization']
             }
           ]
         }
       ]
     });
 
-    // Today's check-ins
-    const todayCheckIns = await CheckIn.count({
-      where: {
-        checkInTime: {
-          [Op.between]: [today, tomorrow]
+    // All-time totals
+    const [
+      totalCheckIns,
+      totalLateArrivals,
+      activeJobsAllTime,
+      pendingAssignments
+    ] = await Promise.all([
+      CheckIn.count(),
+      CheckIn.count({ where: { isLate: true } }),
+      Job.count({ where: { status: ['ACTIVE', 'ASSIGNED', 'IN_PROGRESS'] } }),
+      JobAssignment.count({ where: { status: 'PENDING' } })
+    ]);
+
+    const onTimeRate = totalCheckIns > 0
+      ? Math.round(((totalCheckIns - totalLateArrivals) / totalCheckIns) * 100)
+      : 100;
+
+    // Full history list (could be large)
+    const allCheckIns = await CheckIn.findAll({
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'department', 'specialization', 'hospitalId', 'unitCode']
+        },
+        {
+          model: JobAssignment,
+          as: 'jobAssignment',
+          include: [
+            {
+              model: Job,
+              as: 'job',
+              attributes: ['id', 'title', 'department', 'location', 'facilityName', 'hospitalId', 'unitCode', 'specialization']
+            }
+          ]
         }
-      }
+      ],
+      order: [['checkInTime', 'DESC']]
     });
 
-    // Today's late arrivals
-    const todayLateArrivals = await CheckIn.count({
-      where: {
-        checkInTime: {
-          [Op.between]: [today, tomorrow]
+    // All-time checkouts list
+    const allCheckOuts = await CheckIn.findAll({
+      where: { status: 'CHECKED_OUT' },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'department', 'specialization', 'hospitalId', 'unitCode']
         },
-        isLate: true
-      }
+        {
+          model: JobAssignment,
+          as: 'jobAssignment',
+          include: [
+            {
+              model: Job,
+              as: 'job',
+              attributes: ['id', 'title', 'department', 'location', 'facilityName', 'hospitalId', 'unitCode', 'specialization']
+            }
+          ]
+        }
+      ],
+      order: [['checkOutTime', 'DESC']]
     });
 
-    // Active jobs today
-    const activeJobsToday = await Job.count({
-      where: {
-        startDate: {
-          [Op.between]: [today, tomorrow]
-        },
-        status: ['ACTIVE', 'ASSIGNED', 'IN_PROGRESS']
-      }
-    });
-
-    // Pending assignments
-    const pendingAssignments = await JobAssignment.count({
-      where: {
-        status: 'PENDING'
-      }
-    });
+    const totalCheckOuts = allCheckOuts.length;
 
     const realtimeData = {
       timestamp: now,
@@ -456,19 +480,73 @@ router.get('/dashboard/realtime', authorize('HR', 'ADMIN'), async (req, res) => 
         userName: `${staff.user.firstName} ${staff.user.lastName}`,
         role: staff.user.role,
         department: staff.user.department,
+        specialization: staff.user.specialization,
+        hospitalId: staff.user.hospitalId,
+        unitCode: staff.user.unitCode,
         checkInTime: staff.checkInTime,
         jobTitle: staff.jobAssignment.job.title,
         facilityName: staff.jobAssignment.job.facilityName,
+        jobDepartment: staff.jobAssignment.job.department,
+        jobSpecialization: staff.jobAssignment.job.specialization,
+        jobHospitalId: staff.jobAssignment.job.hospitalId,
+        jobUnitCode: staff.jobAssignment.job.unitCode,
         isLate: staff.isLate,
         workTimeMinutes: Math.floor((now - staff.checkInTime) / (1000 * 60))
       })),
       todayStats: {
-        totalCheckIns: todayCheckIns,
-        lateArrivals: todayLateArrivals,
-        onTimeRate: todayCheckIns > 0 ? Math.round(((todayCheckIns - todayLateArrivals) / todayCheckIns) * 100) : 100,
-        activeJobs: activeJobsToday,
+        // Keeping the key for backward compatibility, but now these are all-time
+        totalCheckIns: totalCheckIns,
+        totalCheckOuts: totalCheckOuts,
+        lateArrivals: totalLateArrivals,
+        onTimeRate: onTimeRate,
+        activeJobs: activeJobsAllTime,
         pendingAssignments: pendingAssignments
-      }
+      },
+      // New fields for clarity
+      summary: {
+        totalCheckIns: totalCheckIns,
+        totalCheckOuts: totalCheckOuts,
+        lateArrivals: totalLateArrivals,
+        onTimeRate: onTimeRate,
+        activeJobs: activeJobsAllTime,
+        pendingAssignments: pendingAssignments
+      },
+      allCheckIns: allCheckIns.map(ci => ({
+        id: ci.id,
+        checkInTime: ci.checkInTime,
+        checkOutTime: ci.checkOutTime,
+        status: ci.status,
+        totalWorkTime: ci.totalWorkTime,
+        totalBreakTime: ci.totalBreakTime,
+        isLate: ci.isLate,
+        isEarlyCheckout: ci.isEarlyCheckout,
+        notes: ci.notes,
+        user: ci.user,
+        job: ci.jobAssignment?.job || null,
+        // convenience top-level fields
+        department: ci.user?.department || ci.jobAssignment?.job?.department || null,
+        specialization: ci.user?.specialization || ci.jobAssignment?.job?.specialization || null,
+        hospitalId: ci.user?.hospitalId || ci.jobAssignment?.job?.hospitalId || null,
+        unitCode: ci.user?.unitCode || ci.jobAssignment?.job?.unitCode || null
+      }))
+      ,
+      allCheckOuts: allCheckOuts.map(ci => ({
+        id: ci.id,
+        checkInTime: ci.checkInTime,
+        checkOutTime: ci.checkOutTime,
+        status: ci.status,
+        totalWorkTime: ci.totalWorkTime,
+        totalBreakTime: ci.totalBreakTime,
+        isLate: ci.isLate,
+        isEarlyCheckout: ci.isEarlyCheckout,
+        notes: ci.notes,
+        user: ci.user,
+        job: ci.jobAssignment?.job || null,
+        department: ci.user?.department || ci.jobAssignment?.job?.department || null,
+        specialization: ci.user?.specialization || ci.jobAssignment?.job?.specialization || null,
+        hospitalId: ci.user?.hospitalId || ci.jobAssignment?.job?.hospitalId || null,
+        unitCode: ci.user?.unitCode || ci.jobAssignment?.job?.unitCode || null
+      }))
     };
 
     res.json({
