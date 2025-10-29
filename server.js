@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 require('dotenv').config();
 
 // Models initialize DB connection; syncing is done via scripts/sync-db.js on demand
@@ -35,6 +36,9 @@ app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files (uploads)
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
+
 // Routes
 app.use('/api/v1/auth', require('./routes/auth'));
 app.use('/api/v1/hr', require('./routes/hr'));
@@ -49,6 +53,7 @@ app.use('/api/v1/performance', require('./routes/performance')); // Performance 
 app.use('/api/v1/permissions', require('./routes/permissions'));
 app.use('/api/v1/admin', require('./routes/admin')); // Admin routes for hospital/unit management
 app.use('/api/v1/public', require('./routes/public')); // Public routes (no auth required)
+app.use('/api/v1/agency', require('./routes/agency')); // Agency routes
 
 // Health check endpoint
 app.get('/health', (req, res) => {
