@@ -57,9 +57,11 @@ Postman Requests
 ----------------
 The collection includes pre-configured requests for:
 - Create Agency, Onboard Hospitals, Get Hospitals
+- List Agencies (with optional linked hospitals), Get Agencies by Hospital
 - Nurse Join, Approve Nurse, Revoke Nurse
 - Add Nurses, List Nurses (with status)
 - List Jobs, Assign Job (FULL/SEGMENTS)
+- Dashboards: Agency Dashboard (AGENCY), Admin Agency Dashboard (ADMIN/HR)
 
 Update collection variables for `agencyId`, `hospitalId`, `nurseId`, `jobId` as needed.
 
@@ -82,5 +84,15 @@ Notes
 -----
 - Existing HR/Staff job acceptance flow remains unchanged; the agency feature layers on top.
 - For production, ensure `JWT_SECRET` and DB credentials are set via environment variables.
+
+Setup helpers
+-------------
+If you added agency features to an existing database, run these once:
+- Ensure users.role enum includes AGENCY:
+  - `npm run fix-enums`
+- Add missing `job_assignments.agency_id` column if needed:
+  - `npm run add-agency-columns`
+- Sync models:
+  - `npm run sync-db`
 
 
