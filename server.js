@@ -4,7 +4,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const { syncDatabase } = require('./models');
+// Models initialize DB connection; syncing is done via scripts/sync-db.js on demand
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -76,25 +76,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Initialize database and start server
-const startServer = async () => {
-  try {
-    // Skip database sync to avoid key limit issues
-    console.log('ℹ️  Skipping database sync to avoid key limit issues.');
-    
-    // Start server
-    app.listen(PORT, () => {
-      console.log(`🚀 Locum Backend API running on port ${PORT}`);
-      console.log(`📊 Health check: http://localhost:${PORT}/health`);
-      console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
-      console.log(`🔐 Environment: ${process.env.NODE_ENV || 'development'}`);
-    });
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
-  }
-};
-
-startServer();
+// Start server (no implicit DB sync)
+app.listen(PORT, () => {
+  console.log(`🚀 Locum Backend API running on port ${PORT}`);
+  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
+  console.log(`🔐 Environment: ${process.env.NODE_ENV || 'development'}`);
+});
 
 module.exports = app;
