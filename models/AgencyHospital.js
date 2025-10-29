@@ -42,7 +42,7 @@ const AgencyHospital = sequelize.define('AgencyHospital', {
 }, {
   tableName: 'agency_hospitals',
   indexes: [
-    { unique: true, fields: ['agencyId', 'hospitalId'] }
+    { unique: true, fields: [{ name: 'agency_id' }, { name: 'hospital_id' }] }
   ]
 });
 

@@ -72,6 +72,36 @@
             }
           }
         }
+        ,
+        {
+          "name": "List Agencies (ADMIN/HR)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/list?includeHospitals=true&linkStatus=APPROVED",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "list"],
+              "query": [
+                { "key": "includeHospitals", "value": "true" },
+                { "key": "linkStatus", "value": "APPROVED" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Agencies by Hospital (ADMIN/HR/AGENCY)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/hospitals/{{hospitalId}}/agencies?status=APPROVED",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "hospitals", "{{hospitalId}}", "agencies"],
+              "query": [ { "key": "status", "value": "APPROVED" } ]
+            }
+          }
+        }
       ]
     },
     {
@@ -189,17 +219,46 @@
           }
         }
       ]
+    },
+    {
+      "name": "Dashboards",
+      "item": [
+        {
+          "name": "Agency Dashboard (AGENCY)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "Admin Agency Dashboard (ADMIN/HR)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/admin/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "admin", "dashboard"]
+            }
+          }
+        }
+      ]
     }
   ],
   "event": [],
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:3000" },
-    { "key": "token", "value": "" },
-    { "key": "agencyId", "value": "1" },
+    { "key": "token", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjksInJvbGUiOiJOVVJTRSIsImlhdCI6MTc2MTczMDQ0MiwiZXhwIjoxNzYxODE2ODQyfQ.BpwgrMAc5Y7FrYkUxvb9ED2cBxZTS7Tm82IumxM6kR0" },
+    { "key": "agencyId", "value": "26" },
     { "key": "hospitalId", "value": "1" },
     { "key": "nurseId", "value": "2" },
     { "key": "nurseId2", "value": "3" },
-    { "key": "jobId", "value": "1" }
+    { "key": "jobId", "value": "8" }
   ]
 }
 

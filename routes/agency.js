@@ -5,6 +5,134 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 
 const router = express.Router();
+// List all agencies (ADMIN/HR). Optional status filter for hospital links summary.
+router.get('/list', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+  try {
+    const { includeHospitals, linkStatus } = req.query;
+
+    const agencies = await User.findAll({
+      where: { role: 'AGENCY', isActive: true },
+      attributes: { exclude: ['password'] }
+    });
+
+    if (!includeHospitals) {
+      return res.json({ agencies });
+    }
+
+    const agencyIds = agencies.map(a => a.id);
+    const links = await AgencyHospital.findAll({
+      where: {
+        agencyId: { [Op.in]: agencyIds },
+        ...(linkStatus ? { status: linkStatus } : {})
+      },
+      include: [{ model: Hospital, as: 'hospital' }]
+    });
+
+    const byAgencyId = links.reduce((acc, l) => {
+      (acc[l.agencyId] = acc[l.agencyId] || []).push(l);
+      return acc;
+    }, {});
+
+    const enriched = agencies.map(a => ({
+      ...a.toJSON(),
+      linkedHospitals: (byAgencyId[a.id] || []).map(x => ({ status: x.status, onboardedAt: x.onboardedAt, hospital: x.hospital }))
+    }));
+
+    return res.json({ agencies: enriched });
+  } catch (error) {
+    console.error('List agencies error:', error);
+    return res.status(500).json({ error: 'Failed to list agencies', message: error.message });
+  }
+});
+
+// Get agencies by hospital (default APPROVED)
+router.get('/hospitals/:hospitalId/agencies', authenticate, authorize('ADMIN', 'HR', 'AGENCY'), async (req, res) => {
+  try {
+    const { hospitalId } = req.params;
+    const { status = 'APPROVED' } = req.query;
+
+    const links = await AgencyHospital.findAll({
+      where: { hospitalId, ...(status ? { status } : {}) },
+      include: [
+        { model: User, as: 'agency', attributes: { exclude: ['password'] } },
+        { model: Hospital, as: 'hospital' }
+      ]
+    });
+
+    const agencies = links.map(l => l.agency);
+    return res.json({ hospitalId, status, agencies, links });
+  } catch (error) {
+    console.error('Get agencies by hospital error:', error);
+    return res.status(500).json({ error: 'Failed to fetch agencies for hospital', message: error.message });
+  }
+});
+
+// Agency dashboard (for agency user)
+router.get('/dashboard', authenticate, authorize('AGENCY'), async (req, res) => {
+  try {
+    const agencyId = req.user.id;
+
+    // Linked hospitals (approved)
+    const links = await AgencyHospital.findAll({ where: { agencyId, status: 'APPROVED' }, include: [{ model: Hospital, as: 'hospital' }] });
+    const hospitalIds = links.map(l => l.hospitalId);
+
+    // Nurse pool by status
+    const poolApproved = await AgencyNurse.count({ where: { agencyId, status: 'APPROVED' } });
+    const poolPending = await AgencyNurse.count({ where: { agencyId, status: 'PENDING' } });
+    const poolRevoked = await AgencyNurse.count({ where: { agencyId, status: 'REVOKED' } });
+
+    // Assignments overview (current and recent)
+    const activeAssignments = await JobAssignment.count({ where: { agencyId, status: ['ASSIGNED', 'IN_PROGRESS'] } });
+    const completed30Days = await JobAssignment.count({
+      where: {
+        agencyId,
+        status: 'COMPLETED',
+        completedAt: { [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) }
+      }
+    });
+
+    // Upcoming jobs from linked hospitals
+    let upcomingJobs = 0;
+    if (hospitalIds.length > 0) {
+      upcomingJobs = await Job.count({ where: { hospitalId: { [Op.in]: hospitalIds }, requiredRole: 'NURSE', status: 'ACTIVE', startDate: { [Op.gte]: new Date() } } });
+    }
+
+    return res.json({
+      hospitals: { total: links.length, items: links.map(l => l.hospital) },
+      pool: { approved: poolApproved, pending: poolPending, revoked: poolRevoked },
+      assignments: { active: activeAssignments, completed30Days },
+      jobs: { upcoming: upcomingJobs }
+    });
+  } catch (error) {
+    console.error('Agency dashboard error:', error);
+    return res.status(500).json({ error: 'Failed to load agency dashboard', message: error.message });
+  }
+});
+
+// Admin/HR dashboard for agencies
+router.get('/admin/dashboard', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+  try {
+    const totalAgencies = await User.count({ where: { role: 'AGENCY', isActive: true } });
+    const approvedLinks = await AgencyHospital.count({ where: { status: 'APPROVED' } });
+    const pendingLinks = await AgencyHospital.count({ where: { status: 'PENDING' } });
+
+    const poolApproved = await AgencyNurse.count({ where: { status: 'APPROVED' } });
+    const poolPending = await AgencyNurse.count({ where: { status: 'PENDING' } });
+
+    const activeAssignments = await JobAssignment.count({ where: { status: ['ASSIGNED', 'IN_PROGRESS'] } });
+    const completed30Days = await JobAssignment.count({ where: { status: 'COMPLETED', completedAt: { [Op.gte]: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } } });
+
+    return res.json({
+      agencies: { total: totalAgencies },
+      hospitalLinks: { approved: approvedLinks, pending: pendingLinks },
+      pool: { approved: poolApproved, pending: poolPending },
+      assignments: { active: activeAssignments, completed30Days }
+    });
+  } catch (error) {
+    console.error('Agency admin dashboard error:', error);
+    return res.status(500).json({ error: 'Failed to load admin agency dashboard', message: error.message });
+  }
+});
 // Nurse-initiated join request to an agency (creates PENDING membership)
 router.post('/:agencyId/join', authenticate, authorize('NURSE', 'ADMIN', 'HR'), async (req, res) => {
   try {
