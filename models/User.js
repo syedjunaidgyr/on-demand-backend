@@ -121,8 +121,12 @@ const User = sequelize.define('User', {
       }
     },
     beforeUpdate: async (user) => {
-      if (user.changed('password')) {
-        user.password = await bcrypt.hash(user.password, 12);
+      // Only hash password if it's being changed and is a plain text password
+      if (user.changed('password') && user.password) {
+        // Check if it's already hashed (bcrypt hashes start with $2a$ or $2b$)
+        if (!user.password.startsWith('$2')) {
+          user.password = await bcrypt.hash(user.password, 12);
+        }
       }
     }
   }

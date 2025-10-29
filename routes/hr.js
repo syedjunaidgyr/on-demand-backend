@@ -201,6 +201,61 @@ router.get('/users/:id', async (req, res) => {
   }
 });
 
+// Get all assignments (returns ALL assignments without pagination for HR/ADMIN)
+router.get('/assignments', async (req, res) => {
+  try {
+    const { 
+      status,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC'
+    } = req.query;
+
+    const whereClause = {};
+
+    if (status) {
+      whereClause.status = status;
+    }
+
+    const assignments = await JobAssignment.findAll({
+      where: whereClause,
+      include: [
+        {
+          model: Job,
+          as: 'job',
+          attributes: ['id', 'title', 'department', 'location', 'startDate', 'endDate', 'startTime', 'endTime', 'facilityName', 'facilityAddress', 'status', 'priority']
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'role', 'department', 'specialization']
+        },
+        {
+          model: User,
+          as: 'assigner',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        },
+        {
+          model: CheckIn,
+          as: 'checkIns',
+          attributes: ['id', 'checkInTime', 'checkOutTime', 'status', 'totalWorkTime', 'isLate', 'isEarlyCheckout']
+        }
+      ],
+      order: [[sortBy, sortOrder.toUpperCase()]]
+    });
+
+    res.json({
+      assignments,
+      total: assignments.length
+    });
+  } catch (error) {
+    console.error('Get all assignments error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch assignments',
+      message: error.message
+    });
+  }
+});
+
 // Create new job posting
 router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
   try {
@@ -320,18 +375,16 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
   }
 });
 
-// Get all jobs with filters
-router.get('/jobs', validate(schemas.pagination, 'query'), async (req, res) => {
+// Get all jobs with filters (returns ALL jobs without pagination)
+router.get('/jobs', async (req, res) => {
   try {
     const { 
-      page, 
-      limit, 
       sortBy = 'createdAt', 
       sortOrder = 'DESC',
       department,
       location,
       requiredRole,
-      status,
+      status, // Only filter by status if explicitly provided
       priority,
       startDate,
       endDate,
@@ -339,10 +392,9 @@ router.get('/jobs', validate(schemas.pagination, 'query'), async (req, res) => {
       maxRate
     } = req.query;
 
-    const offset = (page - 1) * limit;
-    const whereClause = {};
+    const whereClause = {}; // No default filters - returns ALL jobs
 
-    // Apply filters
+    // Apply filters ONLY if explicitly provided
     if (department) whereClause.department = department;
     if (location) whereClause.location = { [Op.like]: `%${location}%` };
     if (requiredRole) whereClause.requiredRole = requiredRole;
@@ -353,39 +405,88 @@ router.get('/jobs', validate(schemas.pagination, 'query'), async (req, res) => {
     if (minRate) whereClause.hourlyRate = { [Op.gte]: minRate };
     if (maxRate) whereClause.hourlyRate = { ...whereClause.hourlyRate, [Op.lte]: maxRate };
 
-    const { count, rows: jobs } = await Job.findAndCountAll({
+    const jobs = await Job.findAll({
       where: whereClause,
+      attributes: [
+        'id', 'title', 'description', 'department', 'location', 'requiredRole', 
+        'specialization', 'startDate', 'endDate', 'startTime', 'endTime', 
+        'hourlyRate', 'status', 'priority', 'maxAssignments', 'facilityName', 
+        'facilityAddress', 'createdBy', 'hospitalId', 'unitCode', 'createdAt', 'updatedAt'
+      ],
       include: [
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email']
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          required: false // LEFT JOIN - include jobs even if creator is missing
         },
         {
           model: JobAssignment,
           as: 'assignments',
+          required: false, // LEFT JOIN - include jobs without assignments
           include: [
             {
               model: User,
               as: 'user',
-              attributes: ['id', 'firstName', 'lastName', 'email', 'role']
+              attributes: ['id', 'firstName', 'lastName', 'email', 'role'],
+              required: false
             }
           ]
         }
       ],
-      limit: parseInt(limit),
-      offset: parseInt(offset),
       order: [[sortBy, sortOrder]]
     });
 
-    res.json({
-      jobs,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(count / limit)
+    // Transform jobs to include assignment status breakdown
+    const transformedJobs = jobs.map(job => {
+      const jobData = job.toJSON();
+      
+      // Count assignments by status
+      const assignmentsByStatus = {
+        PENDING: jobData.assignments.filter(a => a.status === 'PENDING').length,
+        ACCEPTED: jobData.assignments.filter(a => a.status === 'ACCEPTED').length,
+        ASSIGNED: jobData.assignments.filter(a => a.status === 'ASSIGNED').length,
+        IN_PROGRESS: jobData.assignments.filter(a => a.status === 'IN_PROGRESS').length,
+        COMPLETED: jobData.assignments.filter(a => a.status === 'COMPLETED').length,
+        REJECTED: jobData.assignments.filter(a => a.status === 'REJECTED').length,
+        CANCELLED: jobData.assignments.filter(a => a.status === 'CANCELLED').length
+      };
+      
+      const currentAssignments = jobData.assignments.filter(assignment => 
+        ['ACCEPTED', 'ASSIGNED', 'IN_PROGRESS'].includes(assignment.status)
+      ).length;
+      
+      return {
+        ...jobData,
+        currentAssignments,
+        assignmentStatus: assignmentsByStatus
+      };
+    });
+
+    // Calculate summary statistics
+    const summary = {
+      byJobStatus: {
+        ACTIVE: transformedJobs.filter(j => j.status === 'ACTIVE').length,
+        ASSIGNED: transformedJobs.filter(j => j.status === 'ASSIGNED').length,
+        IN_PROGRESS: transformedJobs.filter(j => j.status === 'IN_PROGRESS').length,
+        COMPLETED: transformedJobs.filter(j => j.status === 'COMPLETED').length,
+        CANCELLED: transformedJobs.filter(j => j.status === 'CANCELLED').length
+      },
+      byAssignmentStatus: {
+        PENDING: transformedJobs.reduce((sum, j) => sum + j.assignmentStatus.PENDING, 0),
+        ACCEPTED: transformedJobs.reduce((sum, j) => sum + j.assignmentStatus.ACCEPTED, 0),
+        ASSIGNED: transformedJobs.reduce((sum, j) => sum + j.assignmentStatus.ASSIGNED, 0),
+        IN_PROGRESS: transformedJobs.reduce((sum, j) => sum + j.assignmentStatus.IN_PROGRESS, 0),
+        COMPLETED: transformedJobs.reduce((sum, j) => sum + j.assignmentStatus.COMPLETED, 0),
+        REJECTED: transformedJobs.reduce((sum, j) => sum + j.assignmentStatus.REJECTED, 0),
+        CANCELLED: transformedJobs.reduce((sum, j) => sum + j.assignmentStatus.CANCELLED, 0)
       }
+    };
+
+    res.json({
+      jobs: transformedJobs,
+      total: transformedJobs.length,
+      summary
     });
   } catch (error) {
     console.error('Get jobs error:', error);
@@ -672,6 +773,53 @@ router.get('/jobs/:id/assignments', async (req, res) => {
     console.error('Get assignments error:', error);
     res.status(500).json({
       error: 'Failed to fetch assignments',
+      message: error.message
+    });
+  }
+});
+
+// Get assignment by ID (HR can access any assignment)
+router.get('/assignments/:id', async (req, res) => {
+  try {
+    const assignmentId = req.params.id;
+
+    const assignment = await JobAssignment.findByPk(assignmentId, {
+      include: [
+        {
+          model: Job,
+          as: 'job',
+          attributes: ['id', 'title', 'description', 'department', 'location', 'requiredRole', 'specialization', 'startDate', 'endDate', 'startTime', 'endTime', 'hourlyRate', 'status', 'priority', 'maxAssignments', 'facilityName', 'facilityAddress', 'hospitalId', 'unitCode', 'createdBy']
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'role', 'department', 'specialization', 'location']
+        },
+        {
+          model: User,
+          as: 'assigner',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        },
+        {
+          model: CheckIn,
+          as: 'checkIns',
+          order: [['checkInTime', 'DESC']]
+        }
+      ]
+    });
+
+    if (!assignment) {
+      return res.status(404).json({
+        error: 'Assignment not found',
+        message: 'Assignment does not exist'
+      });
+    }
+
+    res.json({ assignment });
+  } catch (error) {
+    console.error('Get assignment error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch assignment',
       message: error.message
     });
   }

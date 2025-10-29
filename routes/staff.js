@@ -125,6 +125,12 @@ router.get('/jobs/available', async (req, res) => {
 
     const { count, rows: jobs } = await Job.findAndCountAll({
       where: whereClause,
+      attributes: [
+        'id', 'title', 'description', 'department', 'location', 'requiredRole', 
+        'specialization', 'startDate', 'endDate', 'startTime', 'endTime', 
+        'hourlyRate', 'status', 'priority', 'maxAssignments', 'facilityName', 
+        'facilityAddress', 'createdBy', 'hospitalId', 'unitCode', 'createdAt', 'updatedAt'
+      ],
       include: [
         {
           model: User,
@@ -154,8 +160,21 @@ router.get('/jobs/available', async (req, res) => {
       offset: parseInt(offset)
     });
 
+    // Transform jobs to include currentAssignments count
+    const transformedJobs = jobs.map(job => {
+      const jobData = job.toJSON();
+      const currentAssignments = jobData.assignments.filter(assignment => 
+        ['ACCEPTED', 'ASSIGNED', 'IN_PROGRESS'].includes(assignment.status)
+      ).length;
+      
+      return {
+        ...jobData,
+        currentAssignments
+      };
+    });
+
     res.json({
-      jobs,
+      jobs: transformedJobs,
       pagination: {
         total: count,
         page: parseInt(page),
@@ -233,24 +252,22 @@ router.get('/jobs/:id', async (req, res) => {
 });
 
 // Get user's job assignments
+// Get all assignments (returns ALL assignments without pagination)
 router.get('/assignments', async (req, res) => {
   try {
     const { 
-      page = 1, 
-      limit = 5, 
       status,
       sortBy = 'createdAt',
       sortOrder = 'DESC'
     } = req.query;
 
-    const offset = (page - 1) * limit;
     const whereClause = { userId: req.userId };
 
     if (status) {
       whereClause.status = status;
     }
 
-    const { count, rows: assignments } = await JobAssignment.findAndCountAll({
+    const assignments = await JobAssignment.findAll({
       where: whereClause,
       include: [
         {
@@ -269,24 +286,68 @@ router.get('/assignments', async (req, res) => {
           attributes: ['id', 'checkInTime', 'checkOutTime', 'status', 'totalWorkTime', 'isLate', 'isEarlyCheckout']
         }
       ],
-      order: [[sortBy, sortOrder.toUpperCase()]],
-      limit: parseInt(limit),
-      offset: parseInt(offset)
+      order: [[sortBy, sortOrder.toUpperCase()]]
     });
 
     res.json({
       assignments,
-      pagination: {
-        total: count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(count / limit)
-      }
+      total: assignments.length
     });
   } catch (error) {
     console.error('Get assignments error:', error);
     res.status(500).json({
       error: 'Failed to fetch assignments',
+      message: error.message
+    });
+  }
+});
+
+// Get assignment by ID
+router.get('/assignments/:id', async (req, res) => {
+  try {
+    const assignmentId = req.params.id;
+
+    const assignment = await JobAssignment.findOne({
+      where: { 
+        id: assignmentId,
+        userId: req.userId // Ensure user can only access their own assignments
+      },
+      include: [
+        {
+          model: Job,
+          as: 'job',
+          attributes: ['id', 'title', 'description', 'department', 'location', 'requiredRole', 'specialization', 'startDate', 'endDate', 'startTime', 'endTime', 'hourlyRate', 'status', 'priority', 'maxAssignments', 'facilityName', 'facilityAddress', 'hospitalId', 'unitCode']
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'role', 'department', 'specialization']
+        },
+        {
+          model: User,
+          as: 'assigner',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        },
+        {
+          model: CheckIn,
+          as: 'checkIns',
+          order: [['checkInTime', 'DESC']]
+        }
+      ]
+    });
+
+    if (!assignment) {
+      return res.status(404).json({
+        error: 'Assignment not found',
+        message: 'Assignment does not exist or you do not have access to it'
+      });
+    }
+
+    res.json({ assignment });
+  } catch (error) {
+    console.error('Get assignment error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch assignment',
       message: error.message
     });
   }
@@ -450,19 +511,20 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
     // Job status validation removed - allow check-in for any job status
 
     // Check if it's time to check in (job should be starting soon or has started)
-    const checkInResult = isCheckInAllowed(assignment.job.startDate, assignment.job.startTime, 2);
+    // TODO: Temporarily disabled for testing - allow check-in at any time
+    // const checkInResult = isCheckInAllowed(assignment.job.startDate, assignment.job.startTime, 2);
     
-    if (!checkInResult.isAllowed) {
-      console.log('🔍 DEBUG: Too early to check in:', {
-        hoursUntilStart: checkInResult.hoursUntilStart,
-        jobStartTime: checkInResult.jobStartDateTime,
-        currentTime: checkInResult.currentTime
-      });
-      return res.status(400).json({
-        error: 'Too early to check in',
-        message: checkInResult.message
-      });
-    }
+    // if (!checkInResult.isAllowed) {
+    //   console.log('🔍 DEBUG: Too early to check in:', {
+    //     hoursUntilStart: checkInResult.hoursUntilStart,
+    //     jobStartTime: checkInResult.jobStartDateTime,
+    //     currentTime: checkInResult.currentTime
+    //   });
+    //   return res.status(400).json({
+    //     error: 'Too early to check in',
+    //     message: checkInResult.message
+    //   });
+    // }
 
     // Check if already checked in
     const existingCheckIn = await CheckIn.findOne({
