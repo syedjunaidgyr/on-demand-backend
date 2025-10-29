@@ -63,6 +63,18 @@ The collection includes pre-configured requests for:
 - List Jobs, Assign Job (FULL/SEGMENTS)
 - Dashboards: Agency Dashboard (AGENCY), Admin Agency Dashboard (ADMIN/HR)
 
+Blacklist Flow (Hospital-level)
+-------------------------------
+- Blacklist an agency for a specific hospital (ADMIN/HR):
+  - POST `/api/v1/agency/:agencyId/hospitals/:hospitalId/blacklist`
+  - Body:
+    - `reasonCategory`: NON_COMPLIANCE | PERFORMANCE | ATTENDANCE | NO_SHOW | RATE_DISPUTE | CONDUCT | OTHER
+    - `reasonDetails`: Optional free text up to 1000 chars
+- Restore an agency for a hospital (ADMIN/HR):
+  - POST `/api/v1/agency/:agencyId/hospitals/:hospitalId/restore`
+- Blacklisted links set status to `REVOKED` and store `blacklistReason`, `blacklistedBy`, `blacklistedAt`.
+- Agency job listing and assignments require `APPROVED` link; blacklisted agencies lose access for that hospital.
+
 Update collection variables for `agencyId`, `hospitalId`, `nurseId`, `jobId` as needed.
 
 Error Cases You May Encounter
@@ -92,6 +104,7 @@ If you added agency features to an existing database, run these once:
   - `npm run fix-enums`
 - Add missing `job_assignments.agency_id` column if needed:
   - `npm run add-agency-columns`
+- Adds blacklist fields on `agency_hospitals` as well.
 - Sync models:
   - `npm run sync-db`
 

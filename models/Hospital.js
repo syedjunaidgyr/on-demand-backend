@@ -94,6 +94,11 @@ const Hospital = sequelize.define('Hospital', {
     validate: {
       isEmail: true
     }
+  },
+  logo: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    comment: 'Path to hospital logo image file'
   }
 }, {
   tableName: 'hospitals',

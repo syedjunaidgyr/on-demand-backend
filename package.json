@@ -9,6 +9,7 @@
     "sync-db": "node scripts/sync-db.js",
     "fix-enums": "node scripts/fix-enums.js",
     "add-agency-columns": "node scripts/add-agency-columns.js",
+    "add-hospital-logo-column": "node scripts/add-hospital-logo-column.js",
     "migrate": "npx sequelize-cli db:migrate",
     "seed": "npx sequelize-cli db:seed:all"
   },

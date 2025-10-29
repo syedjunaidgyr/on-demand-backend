@@ -195,6 +195,12 @@ const schemas = {
     })
   }),
 
+  // Agency blacklist
+  agencyBlacklist: Joi.object({
+    reasonCategory: Joi.string().valid('NON_COMPLIANCE','PERFORMANCE','ATTENDANCE','NO_SHOW','RATE_DISPUTE','CONDUCT','OTHER').required(),
+    reasonDetails: Joi.string().max(1000).optional()
+  }),
+
   // Job assignment validation
   jobAssignment: Joi.object({
     userId: Joi.number().integer().positive().required(),

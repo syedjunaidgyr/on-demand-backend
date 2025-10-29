@@ -97,11 +97,15 @@ router.get('/dashboard', authenticate, authorize('AGENCY'), async (req, res) => 
       upcomingJobs = await Job.count({ where: { hospitalId: { [Op.in]: hospitalIds }, requiredRole: 'NURSE', status: 'ACTIVE', startDate: { [Op.gte]: new Date() } } });
     }
 
+    // Blacklisted count for this agency
+    const blacklistedCount = await AgencyHospital.count({ where: { agencyId, status: 'REVOKED' } });
+
     return res.json({
       hospitals: { total: links.length, items: links.map(l => l.hospital) },
       pool: { approved: poolApproved, pending: poolPending, revoked: poolRevoked },
       assignments: { active: activeAssignments, completed30Days },
-      jobs: { upcoming: upcomingJobs }
+      jobs: { upcoming: upcomingJobs },
+      blacklist: { blacklistedHospitals: blacklistedCount }
     });
   } catch (error) {
     console.error('Agency dashboard error:', error);
@@ -115,6 +119,7 @@ router.get('/admin/dashboard', authenticate, authorize('ADMIN', 'HR'), async (re
     const totalAgencies = await User.count({ where: { role: 'AGENCY', isActive: true } });
     const approvedLinks = await AgencyHospital.count({ where: { status: 'APPROVED' } });
     const pendingLinks = await AgencyHospital.count({ where: { status: 'PENDING' } });
+    const blacklistedLinks = await AgencyHospital.count({ where: { status: 'REVOKED' } });
 
     const poolApproved = await AgencyNurse.count({ where: { status: 'APPROVED' } });
     const poolPending = await AgencyNurse.count({ where: { status: 'PENDING' } });
@@ -124,13 +129,132 @@ router.get('/admin/dashboard', authenticate, authorize('ADMIN', 'HR'), async (re
 
     return res.json({
       agencies: { total: totalAgencies },
-      hospitalLinks: { approved: approvedLinks, pending: pendingLinks },
+      hospitalLinks: { approved: approvedLinks, pending: pendingLinks, blacklisted: blacklistedLinks },
       pool: { approved: poolApproved, pending: poolPending },
       assignments: { active: activeAssignments, completed30Days }
     });
   } catch (error) {
     console.error('Agency admin dashboard error:', error);
     return res.status(500).json({ error: 'Failed to load admin agency dashboard', message: error.message });
+  }
+});
+
+// Blacklist agency for a hospital (ADMIN/HR)
+router.post('/:agencyId/hospitals/:hospitalId/blacklist', authenticate, authorize('ADMIN', 'HR'), validate(schemas.agencyBlacklist), async (req, res) => {
+  try {
+    const { agencyId, hospitalId } = req.params;
+    const { reasonCategory, reasonDetails } = req.body;
+
+    const link = await AgencyHospital.findOne({ where: { agencyId, hospitalId } });
+    if (!link) {
+      return res.status(404).json({ error: 'Not found', message: 'Agency-hospital link not found' });
+    }
+
+    const finalReason = reasonDetails ? `${reasonCategory}: ${reasonDetails}` : reasonCategory;
+    await link.update({ status: 'REVOKED', blacklistReason: finalReason, blacklistedBy: req.user.id, blacklistedAt: new Date() });
+
+    return res.json({ message: 'Agency blacklisted for hospital', link });
+  } catch (error) {
+    console.error('Blacklist agency error:', error);
+    return res.status(500).json({ error: 'Failed to blacklist agency', message: error.message });
+  }
+});
+
+// Restore agency for a hospital (ADMIN/HR)
+router.post('/:agencyId/hospitals/:hospitalId/restore', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+  try {
+    const { agencyId, hospitalId } = req.params;
+    const link = await AgencyHospital.findOne({ where: { agencyId, hospitalId } });
+    if (!link) {
+      return res.status(404).json({ error: 'Not found', message: 'Agency-hospital link not found' });
+    }
+    await link.update({ status: 'APPROVED', blacklistReason: null, blacklistedBy: null, blacklistedAt: null });
+    return res.json({ message: 'Agency restored for hospital', link });
+  } catch (error) {
+    console.error('Restore agency error:', error);
+    return res.status(500).json({ error: 'Failed to restore agency', message: error.message });
+  }
+});
+
+// Get blacklisted agencies for a hospital (ADMIN/HR)
+router.get('/hospitals/:hospitalId/blacklisted', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+  try {
+    const { hospitalId } = req.params;
+    const { q, from, to } = req.query;
+    const where = { hospitalId, status: 'REVOKED' };
+    if (q) where.blacklistReason = { [Op.like]: `%${q}%` };
+    if (from || to) {
+      where.blacklistedAt = {};
+      if (from) where.blacklistedAt[Op.gte] = new Date(from);
+      if (to) where.blacklistedAt[Op.lte] = new Date(to);
+    }
+    const links = await AgencyHospital.findAll({
+      where,
+      include: [
+        { model: User, as: 'agency', attributes: { exclude: ['password'] } },
+        { model: Hospital, as: 'hospital' }
+      ],
+      order: [['blacklistedAt', 'DESC']]
+    });
+    return res.json({ hospitalId, count: links.length, links });
+  } catch (error) {
+    console.error('Get blacklisted agencies by hospital error:', error);
+    return res.status(500).json({ error: 'Failed to fetch blacklisted agencies', message: error.message });
+  }
+});
+
+// Get blacklisted hospitals for an agency (AGENCY/HR/ADMIN)
+router.get('/:agencyId/blacklisted-hospitals', authenticate, authorize('ADMIN', 'HR', 'AGENCY'), async (req, res) => {
+  try {
+    const { agencyId } = req.params;
+    const { q, from, to } = req.query;
+    if (req.user.role === 'AGENCY' && req.user.id !== parseInt(agencyId)) {
+      return res.status(403).json({ error: 'Access denied', message: 'Cannot view other agency' });
+    }
+    const where = { agencyId, status: 'REVOKED' };
+    if (q) where.blacklistReason = { [Op.like]: `%${q}%` };
+    if (from || to) {
+      where.blacklistedAt = {};
+      if (from) where.blacklistedAt[Op.gte] = new Date(from);
+      if (to) where.blacklistedAt[Op.lte] = new Date(to);
+    }
+    const links = await AgencyHospital.findAll({
+      where,
+      include: [{ model: Hospital, as: 'hospital' }],
+      order: [['blacklistedAt', 'DESC']]
+    });
+    return res.json({ agencyId, count: links.length, links, hospitals: links.map(l => l.hospital) });
+  } catch (error) {
+    console.error('Get blacklisted hospitals for agency error:', error);
+    return res.status(500).json({ error: 'Failed to fetch blacklisted hospitals', message: error.message });
+  }
+});
+
+// Get all blacklisted links (ADMIN/HR) with filters
+router.get('/blacklisted', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+  try {
+    const { hospitalId, agencyId, q, from, to } = req.query;
+    const where = { status: 'REVOKED' };
+    if (hospitalId) where.hospitalId = hospitalId;
+    if (agencyId) where.agencyId = agencyId;
+    if (q) where.blacklistReason = { [Op.like]: `%${q}%` };
+    if (from || to) {
+      where.blacklistedAt = {};
+      if (from) where.blacklistedAt[Op.gte] = new Date(from);
+      if (to) where.blacklistedAt[Op.lte] = new Date(to);
+    }
+    const links = await AgencyHospital.findAll({
+      where,
+      include: [
+        { model: User, as: 'agency', attributes: { exclude: ['password'] } },
+        { model: Hospital, as: 'hospital' }
+      ],
+      order: [['blacklistedAt', 'DESC']]
+    });
+    return res.json({ count: links.length, links });
+  } catch (error) {
+    console.error('Get all blacklisted links error:', error);
+    return res.status(500).json({ error: 'Failed to fetch blacklisted links', message: error.message });
   }
 });
 // Nurse-initiated join request to an agency (creates PENDING membership)

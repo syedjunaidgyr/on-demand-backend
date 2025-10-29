@@ -38,6 +38,22 @@ const AgencyHospital = sequelize.define('AgencyHospital', {
   onboardedAt: {
     type: DataTypes.DATE,
     allowNull: true
+  },
+  blacklistReason: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  blacklistedBy: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
+  blacklistedAt: {
+    type: DataTypes.DATE,
+    allowNull: true
   }
 }, {
   tableName: 'agency_hospitals',

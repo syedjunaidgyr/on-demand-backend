@@ -120,6 +120,7 @@ Thumbs.db
 
 # Uploads directory
 uploads/
+public/uploads/
 
 # Build directories
 build/
