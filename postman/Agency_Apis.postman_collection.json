@@ -1,0 +1,348 @@
+{
+  "info": {
+    "name": "On-Demand Backend - Agency APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "b1e2c3d4-0000-4000-8000-abcdef123456"
+  },
+  "item": [
+    {
+      "name": "Agency",
+      "item": [
+        {
+          "name": "Create Agency (ADMIN/HR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/create",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "create"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"acme.agency@example.com\",\n  \"password\": \"Secret123\",\n  \"confirmPassword\": \"Secret123\",\n  \"name\": \"ACME Agency\",\n  \"phone\": \"+15551234567\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Nurse Join Agency (NURSE)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/join",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "join"]
+            }
+          }
+        },
+        {
+          "name": "Get Agency Hospitals (AGENCY/HR/ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/hospitals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "hospitals"]
+            }
+          }
+        },
+        {
+          "name": "Onboard Agency to Hospitals (ADMIN/HR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/hospitals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "hospitals"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"hospitalIds\": [ {{hospitalId}} ]\n}"
+            }
+          }
+        }
+        ,
+        {
+          "name": "List Agencies (ADMIN/HR)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/list?includeHospitals=true&linkStatus=APPROVED",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "list"],
+              "query": [
+                { "key": "includeHospitals", "value": "true" },
+                { "key": "linkStatus", "value": "APPROVED" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Agencies by Hospital (ADMIN/HR/AGENCY)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/hospitals/{{hospitalId}}/agencies?status=APPROVED",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "hospitals", "{{hospitalId}}", "agencies"],
+              "query": [ { "key": "status", "value": "APPROVED" } ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Blacklist",
+      "item": [
+        {
+          "name": "Blacklist Agency for Hospital (ADMIN/HR)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/hospitals/{{hospitalId}}/blacklist",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "hospitals", "{{hospitalId}}", "blacklist"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reasonCategory\": \"NON_COMPLIANCE\",\n  \"reasonDetails\": \"Breach of shift coverage SLA twice in a month\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Restore Agency for Hospital (ADMIN/HR)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/hospitals/{{hospitalId}}/restore",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "hospitals", "{{hospitalId}}", "restore"]
+            }
+          }
+        },
+        {
+          "name": "Get Blacklisted Agencies by Hospital (ADMIN/HR)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/hospitals/{{hospitalId}}/blacklisted?q=conduct&from=2025-01-01&to=2025-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "hospitals", "{{hospitalId}}", "blacklisted"],
+              "query": [
+                { "key": "q", "value": "conduct" },
+                { "key": "from", "value": "2025-01-01" },
+                { "key": "to", "value": "2025-12-31" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Blacklisted Hospitals for Agency (AGENCY/HR/ADMIN)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/blacklisted-hospitals?q=rate&from=2025-01-01&to=2025-12-31",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "blacklisted-hospitals"],
+              "query": [
+                { "key": "q", "value": "rate" },
+                { "key": "from", "value": "2025-01-01" },
+                { "key": "to", "value": "2025-12-31" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get All Blacklisted Links (ADMIN/HR)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/blacklisted?q=no%20show",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "blacklisted"],
+              "query": [ { "key": "q", "value": "no show" } ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nurses",
+      "item": [
+        {
+          "name": "Add Nurses to Agency (AGENCY/HR/ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/nurses",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "nurses"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nurseIds\": [ {{nurseId}} ]\n}"
+            }
+          }
+        },
+        {
+          "name": "List Nurses (optional status filter)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/nurses?status=APPROVED",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "nurses"],
+              "query": [ { "key": "status", "value": "APPROVED" } ]
+            }
+          }
+        },
+        {
+          "name": "Approve Nurse (AGENCY/HR/ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/nurses/{{nurseId}}/approve",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "nurses", "{{nurseId}}", "approve"]
+            }
+          }
+        },
+        {
+          "name": "Revoke Nurse (AGENCY/HR/ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/{{agencyId}}/nurses/{{nurseId}}/revoke",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "{{agencyId}}", "nurses", "{{nurseId}}", "revoke"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "List Jobs (AGENCY)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/jobs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "jobs"]
+            }
+          }
+        },
+        {
+          "name": "Assign Job - FULL (AGENCY)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/jobs/{{jobId}}/assign",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "jobs", "{{jobId}}", "assign"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"FULL\",\n  \"hourlyRate\": 70,\n  \"assignments\": [ { \"userId\": {{nurseId}} } ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Assign Job - SEGMENTS (AGENCY)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/jobs/{{jobId}}/assign",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "jobs", "{{jobId}}", "assign"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"SEGMENTS\",\n  \"hourlyRate\": 70,\n  \"assignments\": [\n    { \"userId\": {{nurseId}}, \"startDate\": \"2025-11-01\", \"endDate\": \"2025-11-07\" },\n    { \"userId\": {{nurseId2}}, \"startDate\": \"2025-11-08\", \"endDate\": \"2025-11-15\" }\n  ]\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboards",
+      "item": [
+        {
+          "name": "Agency Dashboard (AGENCY)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "Admin Agency Dashboard (ADMIN/HR)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/agency/admin/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "agency", "admin", "dashboard"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjksInJvbGUiOiJOVVJTRSIsImlhdCI6MTc2MTczMDQ0MiwiZXhwIjoxNzYxODE2ODQyfQ.BpwgrMAc5Y7FrYkUxvb9ED2cBxZTS7Tm82IumxM6kR0" },
+    { "key": "agencyId", "value": "26" },
+    { "key": "hospitalId", "value": "1" },
+    { "key": "nurseId", "value": "2" },
+    { "key": "nurseId2", "value": "3" },
+    { "key": "jobId", "value": "8" }
+  ]
+}
+
+

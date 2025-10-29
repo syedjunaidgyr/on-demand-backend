@@ -12,7 +12,7 @@ const schemas = {
     firstName: Joi.string().min(2).max(100).required(),
     lastName: Joi.string().min(2).max(100).required(),
     phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
-    role: Joi.string().valid('HR', 'DOCTOR', 'NURSE', 'ADMIN').required(),
+    role: Joi.string().valid('HR', 'DOCTOR', 'NURSE', 'ADMIN', 'AGENCY').required(),
     department: Joi.string().max(100).optional(),
     location: Joi.string().max(255).optional(),
     hospitalId: Joi.number().integer().positive().optional(),
@@ -147,6 +147,58 @@ const schemas = {
     notes: Joi.string().optional(),
     isRecurring: Joi.boolean().optional(),
     recurringPattern: Joi.object().optional()
+  }),
+
+  // Agency operations
+  agencyCreate: Joi.object({
+    email: Joi.string().email().required(),
+    password: Joi.string().min(6).required(),
+    confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
+      'any.only': 'Password confirmation does not match password'
+    }),
+    name: Joi.string().min(2).max(255).required(),
+    phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
+    address: Joi.object({
+      street: Joi.string().optional(),
+      city: Joi.string().optional(),
+      state: Joi.string().optional(),
+      zipCode: Joi.string().optional(),
+      country: Joi.string().optional()
+    }).optional()
+  }),
+
+  agencyLinkHospitals: Joi.object({
+    hospitalIds: Joi.array().items(Joi.number().integer().positive()).min(1).required()
+  }),
+
+  agencyManageNurses: Joi.object({
+    nurseIds: Joi.array().items(Joi.number().integer().positive()).min(1).required()
+  }),
+
+  agencyNurseStatusFilter: Joi.object({
+    status: Joi.string().valid('PENDING', 'APPROVED', 'REVOKED').optional()
+  }),
+
+  agencyAssignJob: Joi.object({
+    mode: Joi.string().valid('FULL', 'SEGMENTS').required(),
+    hourlyRate: Joi.number().positive().optional(),
+    assignments: Joi.alternatives().conditional('mode', {
+      is: 'FULL',
+      then: Joi.array().length(1).items(Joi.object({
+        userId: Joi.number().integer().positive().required()
+      })).required(),
+      otherwise: Joi.array().min(1).items(Joi.object({
+        userId: Joi.number().integer().positive().required(),
+        startDate: Joi.date().required(),
+        endDate: Joi.date().required()
+      })).required()
+    })
+  }),
+
+  // Agency blacklist
+  agencyBlacklist: Joi.object({
+    reasonCategory: Joi.string().valid('NON_COMPLIANCE','PERFORMANCE','ATTENDANCE','NO_SHOW','RATE_DISPUTE','CONDUCT','OTHER').required(),
+    reasonDetails: Joi.string().max(1000).optional()
   }),
 
   // Job assignment validation

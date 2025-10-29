@@ -1,0 +1,129 @@
+{
+  "info": {
+    "name": "On-Demand Backend - Hospital Logo APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "c2d3e4f5-0000-4000-8000-bcdef0123456"
+  },
+  "item": [
+    {
+      "name": "Hospital Logo",
+      "item": [
+        {
+          "name": "Create Hospital with Logo (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "name", "value": "City General Hospital", "type": "text" },
+                { "key": "code", "value": "CGH001", "type": "text" },
+                { "key": "address[street]", "value": "123 Main St", "type": "text" },
+                { "key": "address[city]", "value": "City", "type": "text" },
+                { "key": "address[state]", "value": "State", "type": "text" },
+                { "key": "address[zipCode]", "value": "12345", "type": "text" },
+                { "key": "address[country]", "value": "Country", "type": "text" },
+                { "key": "phone", "value": "+1234567890", "type": "text" },
+                { "key": "email", "value": "contact@hospital.com", "type": "text" },
+                { "key": "logo", "type": "file", "src": [] }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/hospitals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "hospitals"]
+            }
+          }
+        },
+        {
+          "name": "Create Hospital without Logo (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"City General Hospital\",\n  \"code\": \"CGH001\",\n  \"address\": {\n    \"street\": \"123 Main St\",\n    \"city\": \"City\",\n    \"state\": \"State\",\n    \"zipCode\": \"12345\",\n    \"country\": \"Country\"\n  },\n  \"phone\": \"+1234567890\",\n  \"email\": \"contact@hospital.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/hospitals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "hospitals"]
+            }
+          }
+        },
+        {
+          "name": "Upload Logo to Hospital (ADMIN)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "logo", "type": "file", "src": [] }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/hospitals/{{hospitalId}}/logo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "hospitals", "{{hospitalId}}", "logo"]
+            }
+          }
+        },
+        {
+          "name": "Delete Hospital Logo (ADMIN)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/admin/hospitals/{{hospitalId}}/logo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "admin", "hospitals", "{{hospitalId}}", "logo"]
+            }
+          }
+        },
+        {
+          "name": "Get Hospital Logo (Public)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/uploads/hospitals/{{logoFilename}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["uploads", "hospitals", "{{logoFilename}}"]
+            },
+            "description": "Use logo path from hospital data. Example: hospital-1234567890-1234.png"
+          }
+        },
+        {
+          "name": "Get Hospitals List (includes logo)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/public/hospitals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "public", "hospitals"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "token", "value": "" },
+    { "key": "hospitalId", "value": "1" },
+    { "key": "logoFilename", "value": "hospital-1234567890-1234.png" }
+  ]
+}
+
