@@ -11,6 +11,9 @@ const HospitalPermission = require('./HospitalPermission');
 const UnitPermission = require('./UnitPermission');
 const StaffPermission = require('./StaffPermission');
 const PermissionMaster = require('./PermissionMaster');
+const AgencyHospital = require('./AgencyHospital');
+const AgencyNurse = require('./AgencyNurse');
+const AssignmentSegment = require('./AssignmentSegment');
 
 // Define associations
 // Hospital associations
@@ -37,8 +40,28 @@ JobAssignment.belongsTo(Job, { foreignKey: 'jobId', as: 'job' });
 User.hasMany(JobAssignment, { foreignKey: 'assignedBy', as: 'assignedJobs' });
 JobAssignment.belongsTo(User, { foreignKey: 'assignedBy', as: 'assigner' });
 
+// Agency relationships
+User.hasMany(JobAssignment, { foreignKey: 'agencyId', as: 'agencyAssignments' });
+JobAssignment.belongsTo(User, { foreignKey: 'agencyId', as: 'agency' });
+
+User.hasMany(AgencyHospital, { foreignKey: 'agencyId', as: 'linkedHospitals' });
+AgencyHospital.belongsTo(User, { foreignKey: 'agencyId', as: 'agency' });
+
+Hospital.hasMany(AgencyHospital, { foreignKey: 'hospitalId', as: 'agencies' });
+AgencyHospital.belongsTo(Hospital, { foreignKey: 'hospitalId', as: 'hospital' });
+
+User.hasMany(AgencyNurse, { foreignKey: 'agencyId', as: 'agencyNurses' });
+AgencyNurse.belongsTo(User, { foreignKey: 'agencyId', as: 'agency' });
+
+User.hasMany(AgencyNurse, { foreignKey: 'nurseId', as: 'agencyMemberships' });
+AgencyNurse.belongsTo(User, { foreignKey: 'nurseId', as: 'nurse' });
+
 JobAssignment.hasMany(CheckIn, { foreignKey: 'jobAssignmentId', as: 'checkIns' });
 CheckIn.belongsTo(JobAssignment, { foreignKey: 'jobAssignmentId', as: 'jobAssignment' });
+
+// Assignment segments
+JobAssignment.hasMany(AssignmentSegment, { foreignKey: 'jobAssignmentId', as: 'segments' });
+AssignmentSegment.belongsTo(JobAssignment, { foreignKey: 'jobAssignmentId', as: 'jobAssignment' });
 
 User.hasMany(CheckIn, { foreignKey: 'userId', as: 'checkIns' });
 CheckIn.belongsTo(User, { foreignKey: 'userId', as: 'user' });
@@ -144,5 +167,8 @@ module.exports = {
   UnitPermission,
   StaffPermission,
   PermissionMaster,
+  AgencyHospital,
+  AgencyNurse,
+  AssignmentSegment,
   syncDatabase
 };

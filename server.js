@@ -49,6 +49,7 @@ app.use('/api/v1/performance', require('./routes/performance')); // Performance 
 app.use('/api/v1/permissions', require('./routes/permissions'));
 app.use('/api/v1/admin', require('./routes/admin')); // Admin routes for hospital/unit management
 app.use('/api/v1/public', require('./routes/public')); // Public routes (no auth required)
+app.use('/api/v1/agency', require('./routes/agency')); // Agency routes
 
 // Health check endpoint
 app.get('/health', (req, res) => {

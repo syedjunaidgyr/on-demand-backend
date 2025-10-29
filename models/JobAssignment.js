@@ -7,6 +7,14 @@ const JobAssignment = sequelize.define('JobAssignment', {
     primaryKey: true,
     autoIncrement: true
   },
+  agencyId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
   jobId: {
     type: DataTypes.INTEGER,
     allowNull: false,
