@@ -13,6 +13,7 @@ const {
 const { authenticate, authorize } = require('../middleware/auth');
 const { checkPermission, getUserPermissions, grantPermission, revokePermission } = require('../middleware/permissions');
 const { validate, schemas } = require('../middleware/validation');
+const { sendNotifications } = require('../utils/notifications');
 
 // @route   GET /api/v1/permissions
 // @desc    Get all permissions (Admin only)
@@ -237,6 +238,19 @@ router.post('/users/:userId/grant', authenticate, authorize('ADMIN', 'HR'), asyn
       notes
     });
 
+    // Notify target user
+    try {
+      await sendNotifications('PermissionGranted_User', [{
+        userId: String(user.id),
+        userType: (user.role || '').toLowerCase(),
+        placeholders: {
+          permissionCode,
+          scopeSummary: [req.body.hospitalId ? `hospital:${req.body.hospitalId}` : null, req.body.unitCode ? `unit:${req.body.unitCode}` : null].filter(Boolean).join(', '),
+          expiresAt: req.body.expiresAt || ''
+        }
+      }]);
+    } catch (e) {}
+
     res.status(201).json({
       message: 'Permission granted successfully',
       permission: permissionRecord
@@ -264,6 +278,21 @@ router.post('/users/:userId/revoke', authenticate, authorize('ADMIN', 'HR'), asy
       hospitalId,
       unitCode
     });
+
+    // Notify target user
+    try {
+      const target = await User.findByPk(userId);
+      if (target) {
+        await sendNotifications('PermissionRevoked_User', [{
+          userId: String(target.id),
+          userType: (target.role || '').toLowerCase(),
+          placeholders: {
+            permissionCode,
+            scopeSummary: [hospitalId ? `hospital:${hospitalId}` : null, unitCode ? `unit:${unitCode}` : null].filter(Boolean).join(', ')
+          }
+        }]);
+      }
+    } catch (e) {}
 
     res.status(200).json({
       message: 'Permission revoked successfully'
@@ -347,6 +376,18 @@ router.post('/users/:userId/apply-master', authenticate, authorize('ADMIN', 'HR'
         }
       }
     }
+
+    // Notify target user
+    try {
+      const userTarget = await User.findByPk(userId);
+      if (userTarget) {
+        await sendNotifications('PermissionMasterApplied_User', [{
+          userId: String(userTarget.id),
+          userType: (userTarget.role || '').toLowerCase(),
+          placeholders: { masterName: master.name }
+        }]);
+      }
+    } catch (e) {}
 
     res.status(200).json({
       message: 'Permission master applied successfully',

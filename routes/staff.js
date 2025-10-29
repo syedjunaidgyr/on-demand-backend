@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const { User, Job, JobAssignment, CheckIn, Hospital } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
+const { sendNotifications } = require('../utils/notifications');
 const { isStaffCompatibleWithJob } = require('../utils/helpers');
 const { isCheckInAllowed } = require('../utils/dateTimeHelpers');
 
@@ -416,6 +417,28 @@ router.post('/assignments/:id/respond', validate(schemas.jobAcceptance), async (
         acceptedAt: new Date()
       });
 
+      // Confirm to staff
+      try {
+        await sendNotifications('AssignmentAccepted_ConfirmUser', [{
+          userId: String(req.userId),
+          userType: (req.user.role || '').toLowerCase(),
+          placeholders: { jobTitle: assignment.job.title }
+        }]);
+      } catch (e) {}
+
+      // Notify assigner (HR)
+      try {
+        const assigner = await JobAssignment.findByPk(assignment.id, { include: [{ model: User, as: 'assigner', attributes: ['id','role'] }, { model: Job, as: 'job', attributes: ['title'] }] });
+        if (assigner?.assigner) {
+          const currentUser = await User.findByPk(req.userId);
+          await sendNotifications('AssignmentAccepted_NotifyHR', [{
+            userId: String(assigner.assigner.id),
+            userType: (assigner.assigner.role || 'hr').toLowerCase(),
+            placeholders: { staffName: `${currentUser.firstName} ${currentUser.lastName}`, jobTitle: assigner.job.title }
+          }]);
+        }
+      } catch (e) {}
+
       res.json({
         message: 'Job assignment accepted successfully. HR will review and assign the final candidate.',
         assignment
@@ -426,6 +449,28 @@ router.post('/assignments/:id/respond', validate(schemas.jobAcceptance), async (
         rejectedAt: new Date(),
         rejectionReason
       });
+
+      // Confirm to staff
+      try {
+        await sendNotifications('AssignmentRejected_ConfirmUser', [{
+          userId: String(req.userId),
+          userType: (req.user.role || '').toLowerCase(),
+          placeholders: { jobTitle: assignment.job.title, rejectionReason: rejectionReason || '' }
+        }]);
+      } catch (e) {}
+
+      // Notify assigner (HR)
+      try {
+        const assigner = await JobAssignment.findByPk(assignment.id, { include: [{ model: User, as: 'assigner', attributes: ['id','role'] }, { model: Job, as: 'job', attributes: ['title'] }] });
+        if (assigner?.assigner) {
+          const currentUser = await User.findByPk(req.userId);
+          await sendNotifications('AssignmentRejected_NotifyHR', [{
+            userId: String(assigner.assigner.id),
+            userType: (assigner.assigner.role || 'hr').toLowerCase(),
+            placeholders: { staffName: `${currentUser.firstName} ${currentUser.lastName}`, jobTitle: assigner.job.title, rejectionReason: rejectionReason || '' }
+          }]);
+        }
+      } catch (e) {}
 
       res.json({
         message: 'Job assignment rejected successfully',
@@ -578,6 +623,27 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
       startedAt: new Date()
     });
 
+    // Confirm to staff
+    try {
+      await sendNotifications('CheckIn_ConfirmUser', [{
+        userId: String(req.userId),
+        userType: (req.user.role || '').toLowerCase(),
+        placeholders: { jobTitle: assignment.job.title, checkInTime: checkIn.checkInTime.toISOString() }
+      }]);
+    } catch (e) {}
+
+    // Notify assigner (HR) about check-in
+    try {
+      const assignmentWithAssigner = await JobAssignment.findByPk(jobAssignmentId, { include: [{ model: User, as: 'assigner', attributes: ['id','role'] }] });
+      if (assignmentWithAssigner?.assigner) {
+        await sendNotifications('CheckIn_NotifyHR', [{
+          userId: String(assignmentWithAssigner.assigner.id),
+          userType: (assignmentWithAssigner.assigner.role || 'hr').toLowerCase(),
+          placeholders: { staffName: `${user.firstName} ${user.lastName}`, jobTitle: assignment.job.title, checkInTime: checkIn.checkInTime.toISOString() }
+        }]);
+      }
+    } catch (e) {}
+
     res.status(201).json({
       message: 'Checked in successfully',
       checkIn,
@@ -693,6 +759,27 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
       completedAt: checkOutTime,
       actualEndTime: checkOutTime
     });
+
+    // Confirm to staff
+    try {
+      await sendNotifications('CheckOut_ConfirmUser', [{
+        userId: String(req.userId),
+        userType: (req.user.role || '').toLowerCase(),
+        placeholders: { jobTitle: assignment.job.title, checkOutTime: checkOutTime.toISOString(), totalWorkTime: String(workTime) }
+      }]);
+    } catch (e) {}
+
+    // Notify assigner (HR) about check-out
+    try {
+      const assignmentWithAssigner = await JobAssignment.findByPk(jobAssignmentId, { include: [{ model: User, as: 'assigner', attributes: ['id','role'] }] });
+      if (assignmentWithAssigner?.assigner) {
+        await sendNotifications('CheckOut_NotifyHR', [{
+          userId: String(assignmentWithAssigner.assigner.id),
+          userType: (assignmentWithAssigner.assigner.role || 'hr').toLowerCase(),
+          placeholders: { staffName: `${userForCheckOut.firstName} ${userForCheckOut.lastName}`, jobTitle: assignment.job.title, checkOutTime: checkOutTime.toISOString(), totalWorkTime: String(workTime) }
+        }]);
+      }
+    } catch (e) {}
 
     res.json({
       message: 'Checked out successfully',
@@ -856,6 +943,28 @@ router.post('/assignments/:id/request-extension', validate(schemas.extensionRequ
       requestForExtension: true,
       extensionRequestReason: reason
     });
+
+    // Confirm to staff
+    try {
+      await sendNotifications('ExtensionRequested_ConfirmUser', [{
+        userId: String(req.userId),
+        userType: (req.user.role || '').toLowerCase(),
+        placeholders: { jobTitle: assignment.job?.title || '', requestedHours: String(requestedHours || ''), reason: reason || '' }
+      }]);
+    } catch (e) {}
+
+    // Notify assigner (HR) about extension request
+    try {
+      const assignmentWithAssigner = await JobAssignment.findByPk(assignmentId, { include: [{ model: User, as: 'assigner', attributes: ['id','role'] }, { model: Job, as: 'job', attributes: ['title'] }] });
+      const currentUser = await User.findByPk(req.userId);
+      if (assignmentWithAssigner?.assigner) {
+        await sendNotifications('ExtensionRequested_NotifyHR', [{
+          userId: String(assignmentWithAssigner.assigner.id),
+          userType: (assignmentWithAssigner.assigner.role || 'hr').toLowerCase(),
+          placeholders: { staffName: `${currentUser.firstName} ${currentUser.lastName}`, jobTitle: assignmentWithAssigner.job.title, requestedHours: String(requestedHours || ''), reason: reason || '' }
+        }]);
+      }
+    } catch (e) {}
 
     res.json({
       message: 'Extension request submitted successfully',

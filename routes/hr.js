@@ -4,6 +4,7 @@ const { User, Job, JobAssignment, CheckIn, Hospital, Unit } = require('../models
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas, validateDepartmentSpecialization } = require('../middleware/validation');
 const { findCompatibleStaff } = require('../utils/helpers');
+const { sendNotifications } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -122,6 +123,31 @@ router.post('/jobs/:id/select-candidate', async (req, res) => {
       { status: 'ASSIGNED' },
       { where: { id: jobId }, validate: false }
     );
+
+    // Notify selected staff
+    try {
+      await selectedAssignment.reload({ include: [{ model: Job, as: 'job', attributes: ['title','startDate','location'] }, { model: User, as: 'user', attributes: ['id','role','firstName','lastName'] }] });
+      await sendNotifications('CandidateSelected_NotifyStaff', [{
+        userId: String(selectedAssignment.user.id),
+        userType: (selectedAssignment.user.role || '').toLowerCase(),
+        placeholders: { jobTitle: selectedAssignment.job.title, startDate: selectedAssignment.job.startDate, location: selectedAssignment.job.location }
+      }]);
+    } catch (e) {}
+
+    // Notify HR creator (if available)
+    try {
+      const job = await Job.findByPk(jobId);
+      if (job?.createdBy) {
+        const creator = await User.findByPk(job.createdBy);
+        if (creator) {
+          await sendNotifications('CandidateSelected_ConfirmHR', [{
+            userId: String(creator.id),
+            userType: (creator.role || 'hr').toLowerCase(),
+            placeholders: { assigneeName: `${selectedAssignment.user.firstName} ${selectedAssignment.user.lastName}`, jobTitle: selectedAssignment.job.title }
+          }]);
+        }
+      }
+    } catch (e) {}
 
     res.json({
       message: 'Candidate assigned successfully. Staff can now check-in for the job.',
@@ -288,6 +314,18 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
 
     const job = await Job.create(jobData);
 
+    // Notify creator HR
+    try {
+      const creator = await User.findByPk(req.userId);
+      if (creator) {
+        await sendNotifications('JobCreated_Creator', [{
+          userId: String(creator.id),
+          userType: (creator.role || 'hr').toLowerCase(),
+          placeholders: { jobTitle: job.title, department: job.department, location: job.location, startDate: job.startDate }
+        }]);
+      }
+    } catch (e) {}
+
     // Find compatible staff for this job
     const whereClause = {
       role: job.requiredRole,
@@ -338,6 +376,20 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
       
       const createdAssignments = await Promise.all(assignmentPromises);
       assignments.push(...createdAssignments);
+
+      // Notify compatible staff pool by role
+      try {
+        const notifications = compatibleStaff.map(staff => ({
+          userId: String(staff.id),
+          userType: (staff.role || (job.requiredRole || '')).toLowerCase(),
+          placeholders: { jobTitle: job.title, department: job.department, location: job.location, startDate: job.startDate }
+        }));
+        if (job.requiredRole === 'DOCTOR') {
+          await sendNotifications('JobCreated_Doctor', notifications);
+        } else if (job.requiredRole === 'NURSE') {
+          await sendNotifications('JobCreated_Nurse', notifications);
+        }
+      } catch (e) {}
       
       console.log('✅ DEBUG: Assignments created:', {
         jobId: job.id,
@@ -570,6 +622,35 @@ router.put('/jobs/:id', validate(schemas.jobUpdate), async (req, res) => {
 
     await job.update(req.body);
 
+    // Notify assigned staff about job update
+    try {
+      const assignments = await JobAssignment.findAll({ where: { jobId: job.id }, include: [{ model: User, as: 'user', attributes: ['id','role'] }] });
+      const notifications = assignments
+        .filter(a => ['PENDING','ACCEPTED','IN_PROGRESS','ASSIGNED'].includes(a.status))
+        .map(a => ({
+          userId: String(a.user.id),
+          userType: (a.user.role || '').toLowerCase(),
+          placeholders: { jobTitle: job.title, changeSummary: 'Job details updated' }
+        }));
+      if (notifications.length > 0) {
+        await sendNotifications('JobUpdated_AssignedStaff', notifications);
+      }
+    } catch (e) {}
+
+    // Notify job creator (HR)
+    try {
+      if (job.createdBy) {
+        const creator = await User.findByPk(job.createdBy);
+        if (creator) {
+          await sendNotifications('JobUpdated_Creator', [{
+            userId: String(creator.id),
+            userType: (creator.role || 'hr').toLowerCase(),
+            placeholders: { jobTitle: job.title, changeSummary: 'Job details updated' }
+          }]);
+        }
+      }
+    } catch (e) {}
+
     res.json({
       message: 'Job updated successfully',
       job
@@ -623,6 +704,52 @@ router.patch('/jobs/:id/cancel', async (req, res) => {
         }
       }
     );
+
+    // Notify other accepted candidates they were not selected
+    try {
+      const others = await JobAssignment.findAll({
+        where: { jobId: jobId, status: 'REJECTED' },
+        include: [{ model: User, as: 'user', attributes: ['id','role'] }]
+      });
+      const job = await Job.findByPk(jobId);
+      const notifications = others.map(o => ({
+        userId: String(o.user.id),
+        userType: (o.user.role || '').toLowerCase(),
+        placeholders: { jobTitle: job?.title || '' }
+      }));
+      if (notifications.length > 0) {
+        await sendNotifications('CandidateRejected_AfterSelection', notifications);
+      }
+    } catch (e) {}
+
+    // Notify assigned staff about cancellation
+    try {
+      const assignments = await JobAssignment.findAll({ where: { jobId: job.id }, include: [{ model: User, as: 'user', attributes: ['id','role'] }] });
+      const notifications = assignments
+        .filter(a => ['PENDING','ACCEPTED','IN_PROGRESS','ASSIGNED'].includes(a.status))
+        .map(a => ({
+          userId: String(a.user.id),
+          userType: (a.user.role || '').toLowerCase(),
+          placeholders: { jobTitle: job.title, reason: reason || 'No reason provided' }
+        }));
+      if (notifications.length > 0) {
+        await sendNotifications('JobCancelled_AssignedStaff', notifications);
+      }
+    } catch (e) {}
+
+    // Notify job creator
+    try {
+      if (job.createdBy) {
+        const creator = await User.findByPk(job.createdBy);
+        if (creator) {
+          await sendNotifications('JobCancelled_Creator', [{
+            userId: String(creator.id),
+            userType: (creator.role || 'hr').toLowerCase(),
+            placeholders: { jobTitle: job.title, reason: reason || 'No reason provided' }
+          }]);
+        }
+      }
+    } catch (e) {}
 
     res.json({
       message: 'Job cancelled successfully',
@@ -729,6 +856,27 @@ router.post('/jobs/:id/assign', validate(schemas.jobAssignment), async (req, res
 
     // Job status remains ACTIVE until doctor starts working
     // The assignment status (PENDING, ACCEPTED, etc.) is tracked separately
+
+    // Notify assigned user
+    try {
+      await sendNotifications('JobAssigned_AssignedUser', [{
+        userId: String(user.id),
+        userType: (user.role || '').toLowerCase(),
+        placeholders: { jobTitle: job.title, startDate: job.startDate, location: job.location }
+      }]);
+    } catch (e) {}
+
+    // Notify assigner confirmation
+    try {
+      const assigner = await User.findByPk(req.userId);
+      if (assigner) {
+        await sendNotifications('JobAssigned_ConfToAssigner', [{
+          userId: String(assigner.id),
+          userType: (assigner.role || 'hr').toLowerCase(),
+          placeholders: { assigneeName: `${user.firstName} ${user.lastName}` , jobTitle: job.title }
+        }]);
+      }
+    } catch (e) {}
 
     res.status(201).json({
       message: 'Job assigned successfully',

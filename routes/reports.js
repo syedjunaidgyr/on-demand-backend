@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const { User, Job, JobAssignment, CheckIn, Report } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
+const { sendNotifications } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -100,6 +101,18 @@ router.post('/job-postings', validate(schemas.reportGeneration), async (req, res
         generatedAt: report.generatedAt
       }
     });
+
+    // Notify generator (HR/Admin)
+    try {
+      const generator = await User.findByPk(req.userId);
+      if (generator) {
+        await sendNotifications('ReportGenerated_AdminTeam', [{
+          userId: String(generator.id),
+          userType: (generator.role || 'hr').toLowerCase(),
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+        }]);
+      }
+    } catch (e) {}
   } catch (error) {
     console.error('Job postings report error:', error);
     res.status(500).json({
@@ -203,6 +216,18 @@ router.post('/job-assignments', validate(schemas.reportGeneration), async (req, 
         generatedAt: report.generatedAt
       }
     });
+
+    // Notify generator
+    try {
+      const generator = await User.findByPk(req.userId);
+      if (generator) {
+        await sendNotifications('ReportGenerated_AdminTeam', [{
+          userId: String(generator.id),
+          userType: (generator.role || 'hr').toLowerCase(),
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+        }]);
+      }
+    } catch (e) {}
   } catch (error) {
     console.error('Job assignments report error:', error);
     res.status(500).json({
@@ -324,6 +349,18 @@ router.post('/staff-performance', validate(schemas.reportGeneration), async (req
         generatedAt: report.generatedAt
       }
     });
+
+    // Notify generator
+    try {
+      const generator = await User.findByPk(req.userId);
+      if (generator) {
+        await sendNotifications('ReportGenerated_AdminTeam', [{
+          userId: String(generator.id),
+          userType: (generator.role || 'hr').toLowerCase(),
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+        }]);
+      }
+    } catch (e) {}
   } catch (error) {
     console.error('Staff performance report error:', error);
     res.status(500).json({
@@ -465,6 +502,18 @@ router.post('/financial', validate(schemas.reportGeneration), async (req, res) =
         generatedAt: report.generatedAt
       }
     });
+
+    // Notify generator
+    try {
+      const generator = await User.findByPk(req.userId);
+      if (generator) {
+        await sendNotifications('ReportGenerated_AdminTeam', [{
+          userId: String(generator.id),
+          userType: (generator.role || 'hr').toLowerCase(),
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+        }]);
+      }
+    } catch (e) {}
   } catch (error) {
     console.error('Financial report error:', error);
     res.status(500).json({
@@ -603,6 +652,18 @@ router.post('/attendance', validate(schemas.reportGeneration), async (req, res) 
         generatedAt: report.generatedAt
       }
     });
+
+    // Notify generator
+    try {
+      const generator = await User.findByPk(req.userId);
+      if (generator) {
+        await sendNotifications('ReportGenerated_AdminTeam', [{
+          userId: String(generator.id),
+          userType: (generator.role || 'hr').toLowerCase(),
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+        }]);
+      }
+    } catch (e) {}
   } catch (error) {
     console.error('Attendance report error:', error);
     res.status(500).json({

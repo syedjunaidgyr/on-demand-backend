@@ -2,6 +2,7 @@ const express = require('express');
 const { User } = require('../models');
 const { generateToken, authenticate } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
+const { sendNotifications } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -173,13 +174,28 @@ router.put('/change-password', authenticate, validate(schemas.passwordChange), a
       });
     }
 
-    // Update password (confirmPassword is excluded from database save)
-    user.password = newPassword;
-    await user.save();
+  // Update password (confirmPassword is excluded from database save)
+  user.password = newPassword;
+  await user.save();
 
-    res.json({
-      message: 'Password changed successfully'
-    });
+  // Send security notification
+  try {
+    await sendNotifications('PasswordChanged_User', [{
+      userId: String(user.id),
+      userType: (user.role || '').toLowerCase(),
+      placeholders: { changedAt: new Date().toISOString() }
+    }]);
+    // Admin/HR audit copy
+    await sendNotifications('PasswordChanged_AdminAudit', [{
+      userId: String(user.id),
+      userType: 'hr',
+      placeholders: { email: user.email, changedAt: new Date().toISOString() }
+    }]);
+  } catch (e) {}
+
+  res.json({
+    message: 'Password changed successfully'
+  });
   } catch (error) {
     console.error('Password change error:', error);
     res.status(500).json({
