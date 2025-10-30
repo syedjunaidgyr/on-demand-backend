@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const { User, Job, JobAssignment, CheckIn, Report } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
-const { sendNotifications } = require('../utils/notifications');
+const { sendNotifications, formatHuman } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -109,7 +109,7 @@ router.post('/job-postings', validate(schemas.reportGeneration), async (req, res
         await sendNotifications('ReportGenerated_AdminTeam', [{
           userId: String(generator.id),
           userType: (generator.role || 'hr').toLowerCase(),
-          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: formatHuman(report.generatedAt) }
         }]);
       }
     } catch (e) {}
@@ -224,7 +224,7 @@ router.post('/job-assignments', validate(schemas.reportGeneration), async (req, 
         await sendNotifications('ReportGenerated_AdminTeam', [{
           userId: String(generator.id),
           userType: (generator.role || 'hr').toLowerCase(),
-          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: formatHuman(report.generatedAt) }
         }]);
       }
     } catch (e) {}
@@ -357,7 +357,7 @@ router.post('/staff-performance', validate(schemas.reportGeneration), async (req
         await sendNotifications('ReportGenerated_AdminTeam', [{
           userId: String(generator.id),
           userType: (generator.role || 'hr').toLowerCase(),
-          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: formatHuman(report.generatedAt) }
         }]);
       }
     } catch (e) {}
@@ -510,7 +510,7 @@ router.post('/financial', validate(schemas.reportGeneration), async (req, res) =
         await sendNotifications('ReportGenerated_AdminTeam', [{
           userId: String(generator.id),
           userType: (generator.role || 'hr').toLowerCase(),
-          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: formatHuman(report.generatedAt) }
         }]);
       }
     } catch (e) {}
@@ -660,7 +660,7 @@ router.post('/attendance', validate(schemas.reportGeneration), async (req, res) 
         await sendNotifications('ReportGenerated_AdminTeam', [{
           userId: String(generator.id),
           userType: (generator.role || 'hr').toLowerCase(),
-          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: report.generatedAt.toISOString() }
+          placeholders: { reportTitle: report.title, reportType: report.type, generatedAt: formatHuman(report.generatedAt) }
         }]);
       }
     } catch (e) {}
