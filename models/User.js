@@ -119,6 +119,49 @@ const User = sequelize.define('User', {
   }
 }, {
   tableName: 'users',
+  validate: {
+    doctorNurseHrMustHaveUnit() {
+      // DOCTOR, NURSE, HR must have both hospitalId and unitCode
+      if (['DOCTOR', 'NURSE', 'HR'].includes(this.role)) {
+        if (!this.hospitalId) {
+          throw new Error(`${this.role} must be assigned to a hospital`);
+        }
+        if (!this.unitCode) {
+          throw new Error(`${this.role} must be assigned to a unit`);
+        }
+      }
+      
+      // HOSPITAL_ADMIN must have hospitalId but NOT unitCode
+      if (this.role === 'HOSPITAL_ADMIN') {
+        if (!this.hospitalId) {
+          throw new Error('HOSPITAL_ADMIN must be assigned to a hospital');
+        }
+        if (this.unitCode) {
+          throw new Error('HOSPITAL_ADMIN should not be assigned to a specific unit');
+        }
+      }
+      
+      // ADMIN should not have hospitalId or unitCode
+      if (this.role === 'ADMIN') {
+        if (this.hospitalId) {
+          throw new Error('ADMIN should not be assigned to a hospital (they have system-wide access)');
+        }
+        if (this.unitCode) {
+          throw new Error('ADMIN should not be assigned to a unit (they have system-wide access)');
+        }
+      }
+      
+      // AGENCY should NOT have hospitalId (onboarded via AgencyHospital table)
+      if (this.role === 'AGENCY') {
+        if (this.hospitalId) {
+          throw new Error('AGENCY should not have a direct hospital assignment (use AgencyHospital table for onboarding)');
+        }
+        if (this.unitCode) {
+          throw new Error('AGENCY should not be assigned to a specific unit');
+        }
+      }
+    }
+  },
   hooks: {
     beforeCreate: async (user) => {
       if (user.password) {

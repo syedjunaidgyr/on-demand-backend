@@ -331,6 +331,142 @@ Returns hospital-specific statistics:
 
 ---
 
+## Database Relationships
+
+### Complete Hierarchy
+```
+Hospital (1)
+├── Unit (Many) - linked via hospitalId
+│   ├── User (Many) - linked via hospitalId + unitCode
+│   └── Job (Many) - linked via hospitalId + unitCode
+├── User (Many) - linked via hospitalId (hospital-level users)
+├── Job (Many) - linked via hospitalId (hospital-level jobs)
+└── HOSPITAL_ADMIN (1 or Many) - linked via hospitalId only
+```
+
+### Hospital-Unit Relationship
+✅ **Confirmed: Hospitals can have multiple units**
+
+**Database Schema:**
+- `Unit` table has `hospitalId` column (foreign key to `hospitals.id`)
+- Unique constraint: `(hospitalId, unitCode)` - prevents duplicate unit codes within a hospital
+- Association: `Hospital.hasMany(Unit)` (One-to-Many relationship)
+
+**Example:**
+```
+Hospital (ID: 1) "City General Hospital"
+├── Unit (ID: 1) - hospitalId: 1, unitCode: "ICU"
+├── Unit (ID: 2) - hospitalId: 1, unitCode: "ER"
+├── Unit (ID: 3) - hospitalId: 1, unitCode: "SURGERY"
+└── Unit (ID: 4) - hospitalId: 1, unitCode: "PEDIATRICS"
+```
+
+**Verified Features:**
+- ✅ One hospital can have multiple units
+- ✅ Units are properly linked via `hospitalId`
+- ✅ Unit codes must be unique within a hospital
+- ✅ Hospital admin can manage all units in their hospital
+- ✅ Units can be filtered by hospitalId
+
+### User Relationships (Role-Based Linking)
+✅ **User linking is MANDATORY based on role**
+
+**Database Schema:**
+- `User` table has `hospitalId` (foreign key to `hospitals.id`)
+- `User` table has `unitCode` (references unit code within the hospital)
+
+**Role-Based Requirements:**
+
+#### ✅ DOCTOR, NURSE, HR (MANDATORY Hospital + Unit)
+- **MUST** have `hospitalId` - Required
+- **MUST** have `unitCode` - Required
+- Linked to BOTH Hospital AND Unit
+
+#### ✅ HOSPITAL_ADMIN (MANDATORY Hospital, NO Unit)
+- **MUST** have `hospitalId` - Required
+- **MUST NOT** have `unitCode` - Forbidden
+- Linked to Hospital ONLY (not unit)
+
+#### ✅ ADMIN (NO Hospital, NO Unit)
+- **MUST NOT** have `hospitalId` - Forbidden
+- **MUST NOT** have `unitCode` - Forbidden
+- System-wide access, no hospital/unit assignment
+
+#### ✅ AGENCY (NO Hospital, NO Unit at creation)
+- **MUST NOT** have `hospitalId` - Forbidden (onboarded via AgencyHospital table)
+- **MUST NOT** have `unitCode` - Forbidden
+- Initial creation: No hospital assignment
+- Onboarding: Multiple hospitals via AgencyHospital table (many-to-many relationship)
+- Jobs assigned by AGENCY can be to specific units
+
+**Example:**
+```
+Hospital (ID: 1) "City General Hospital"
+├── Unit (ID: 1) - hospitalId: 1, unitCode: "ICU"
+│   ├── User (ID: 1) - hospitalId: 1, unitCode: "ICU", role: "DOCTOR" ✅
+│   ├── User (ID: 2) - hospitalId: 1, unitCode: "ICU", role: "NURSE" ✅
+│   └── User (ID: 3) - hospitalId: 1, unitCode: "ICU", role: "HR" ✅
+│   └── Job (ID: 1) - hospitalId: 1, unitCode: "ICU", createdBy: agencyUserId ✅
+├── Unit (ID: 2) - hospitalId: 1, unitCode: "ER"
+│   ├── User (ID: 4) - hospitalId: 1, unitCode: "ER", role: "DOCTOR" ✅
+│   └── User (ID: 5) - hospitalId: 1, unitCode: "ER", role: "NURSE" ✅
+└── User (ID: 6) - hospitalId: 1, unitCode: null, role: "HOSPITAL_ADMIN" ✅
+
+User (ID: 7) - hospitalId: null, unitCode: null, role: "ADMIN" ✅ (System-wide)
+User (ID: 9) - hospitalId: null, unitCode: null, role: "AGENCY" ✅ (Onboarded to hospitals via AgencyHospital table)
+
+// Agency-Hospital Onboarding (many-to-many)
+AgencyHospital:
+- agencyId: 9, hospitalId: 1, status: "APPROVED" ✅
+- agencyId: 9, hospitalId: 2, status: "APPROVED" ✅
+```
+
+**Validation:**
+- ✅ Model-level validation in `User.js`
+- ✅ API-level validation in `validation.js`
+- ✅ Registration enforces role-based requirements
+- ✅ Clear error messages for violations
+
+**Verified Features:**
+- ✅ DOCTOR/NURSE/HR MUST have hospital + unit
+- ✅ HOSPITAL_ADMIN MUST have hospital (no unit)
+- ✅ ADMIN must NOT have hospital/unit
+- ✅ AGENCY must NOT have hospital/unit at creation
+- ✅ AGENCY onboarded to hospitals via AgencyHospital table (many-to-many)
+- ✅ AGENCY can be onboarded to multiple hospitals
+- ✅ AGENCY jobs can be assigned to specific units
+- ✅ Users can be filtered by hospitalId
+- ✅ Users can be filtered by unitCode
+- ✅ Hospital admin can view all users in their hospital
+
+### Job Relationships
+✅ **Jobs are MANDATORY linked to both Hospital AND Unit**
+
+**Database Schema:**
+- `Job` table has `hospitalId` - **Required** (allowNull: false)
+- `Job` table has `unitCode` - **Required** (allowNull: false)
+- Jobs belong to a specific hospital AND unit combination
+- Both fields are MANDATORY
+
+**Example:**
+```
+Hospital (ID: 1) "City General Hospital"
+├── Unit (ID: 1) - hospitalId: 1, unitCode: "ICU"
+│   ├── Job (ID: 1) - hospitalId: 1, unitCode: "ICU"
+│   └── Job (ID: 2) - hospitalId: 1, unitCode: "ICU"
+└── Unit (ID: 2) - hospitalId: 1, unitCode: "ER"
+    └── Job (ID: 3) - hospitalId: 1, unitCode: "ER"
+```
+
+**Verified Features:**
+- ✅ Jobs belong to a specific hospital
+- ✅ Jobs are assigned to specific units within that hospital
+- ✅ Hospital admin can view all jobs in their hospital
+- ✅ Jobs can be filtered by hospitalId and unitCode
+- ✅ Dashboard statistics include job counts per hospital
+
+---
+
 ## Usage Examples
 
 ### Create System Admin
@@ -416,6 +552,7 @@ PUT /api/v1/auth/profile/theme
 - Dashboards for both admin types
 - JWT integration
 - Database migration scripts
+- Role-based validation
 
 ✅ **One-Command Setup:**
 - New DB: `npm run setup-themes`
@@ -425,6 +562,20 @@ PUT /api/v1/auth/profile/theme
 - All endpoints implemented
 - Proper access control
 - Comprehensive documentation
+
+---
+
+## Role Linking Requirements Summary
+
+| Role | Hospital Required? | Unit Required? | Validation |
+|------|-------------------|----------------|------------|
+| **DOCTOR** | ✅ Yes (Mandatory) | ✅ Yes (Mandatory) | Model + API |
+| **NURSE** | ✅ Yes (Mandatory) | ✅ Yes (Mandatory) | Model + API |
+| **HR** | ✅ Yes (Mandatory) | ✅ Yes (Mandatory) | Model + API |
+| **HOSPITAL_ADMIN** | ✅ Yes (Mandatory) | ❌ No (Forbidden) | Model + API |
+| **ADMIN** | ❌ No (Forbidden) | ❌ No (Forbidden) | Model + API |
+| **AGENCY** | ❌ No (Onboarded via AgencyHospital) | ❌ No (Forbidden) | Model + API |
+| **Job** | ✅ Yes (Mandatory) | ✅ Yes (Mandatory) | Model |
 
 ---
 
