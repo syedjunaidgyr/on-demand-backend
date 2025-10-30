@@ -12,7 +12,7 @@ const schemas = {
     firstName: Joi.string().min(2).max(100).required(),
     lastName: Joi.string().min(2).max(100).required(),
     phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
-    role: Joi.string().valid('HR', 'DOCTOR', 'NURSE', 'ADMIN', 'AGENCY').required(),
+    role: Joi.string().valid('HR', 'DOCTOR', 'NURSE', 'ADMIN', 'AGENCY', 'HOSPITAL_ADMIN').required(),
     department: Joi.string().max(100).optional(),
     location: Joi.string().max(255).optional(),
     hospitalId: Joi.number().integer().positive().optional(),
@@ -31,6 +31,46 @@ const schemas = {
       zipCode: Joi.string().required(),
       country: Joi.string().required()
     }).optional()
+  }).when('.role', {
+    is: Joi.string().valid('DOCTOR', 'NURSE', 'HR'),
+    then: Joi.object({
+      hospitalId: Joi.number().integer().positive().required().messages({
+        'any.required': 'DOCTOR, NURSE, and HR must be assigned to a hospital'
+      }),
+      unitCode: Joi.string().max(50).required().messages({
+        'any.required': 'DOCTOR, NURSE, and HR must be assigned to a unit'
+      })
+    })
+  }).when('.role', {
+    is: 'HOSPITAL_ADMIN',
+    then: Joi.object({
+      hospitalId: Joi.number().integer().positive().required().messages({
+        'any.required': 'HOSPITAL_ADMIN must be assigned to a hospital'
+      }),
+      unitCode: Joi.forbidden().messages({
+        'any.unknown': 'HOSPITAL_ADMIN should not be assigned to a specific unit'
+      })
+    })
+  }).when('.role', {
+    is: 'ADMIN',
+    then: Joi.object({
+      hospitalId: Joi.forbidden().messages({
+        'any.unknown': 'ADMIN should not be assigned to a hospital (system-wide access)'
+      }),
+      unitCode: Joi.forbidden().messages({
+        'any.unknown': 'ADMIN should not be assigned to a unit (system-wide access)'
+      })
+    })
+  }).when('.role', {
+    is: 'AGENCY',
+    then: Joi.object({
+      hospitalId: Joi.forbidden().messages({
+        'any.unknown': 'AGENCY should not have direct hospital assignment (use AgencyHospital table for onboarding)'
+      }),
+      unitCode: Joi.forbidden().messages({
+        'any.unknown': 'AGENCY should not be assigned to a specific unit'
+      })
+    })
   }),
 
   userLogin: Joi.object({

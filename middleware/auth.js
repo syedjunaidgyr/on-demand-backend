@@ -1,8 +1,34 @@
 const jwt = require('jsonwebtoken');
 const { User } = require('../models');
 
-// Generate JWT token
-const generateToken = (userId, role) => {
+// Generate JWT token with theme data
+const generateToken = async (userId, role) => {
+  // Get user's effective theme
+  const user = await User.findByPk(userId, {
+    attributes: ['id', 'selectedThemeId', 'hospitalId']
+  });
+  
+  let activeTheme = null;
+  if (user) {
+    activeTheme = await user.getEffectiveTheme();
+  }
+  
+  // Include theme ID in token payload for frontend
+  const payload = { 
+    userId, 
+    role,
+    themeId: user?.selectedThemeId || null
+  };
+  
+  return jwt.sign(
+    payload,
+    process.env.JWT_SECRET || 'fallback_secret',
+    { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+  );
+};
+
+// Generate token without theme (for backward compatibility)
+const generateTokenSync = (userId, role) => {
   return jwt.sign(
     { userId, role },
     process.env.JWT_SECRET || 'fallback_secret',
@@ -138,6 +164,7 @@ const optionalAuth = async (req, res, next) => {
 
 module.exports = {
   generateToken,
+  generateTokenSync,
   verifyToken,
   authenticate,
   authorize,

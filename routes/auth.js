@@ -1,8 +1,9 @@
 const express = require('express');
-const { User } = require('../models');
+const { User, Hospital } = require('../models');
 const { generateToken, authenticate } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 const { sendNotifications, formatHuman } = require('../utils/notifications');
+const { themeExists } = require('../utils/themeHelpers');
 
 const router = express.Router();
 
@@ -30,13 +31,17 @@ router.post('/register', validate(schemas.userRegistration), async (req, res) =>
       ...otherData
     });
 
-    // Generate token
-    const token = generateToken(user.id, user.role);
+    // Generate token with theme data
+    const token = await generateToken(user.id, user.role);
+    
+    // Get user's active theme
+    const activeTheme = await user.getEffectiveTheme();
 
     res.status(201).json({
       message: 'User registered successfully',
       user: user.toJSON(),
-      token
+      token,
+      activeTheme
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -82,13 +87,17 @@ router.post('/login', validate(schemas.userLogin), async (req, res) => {
     user.lastLogin = new Date();
     await user.save();
 
-    // Generate token
-    const token = generateToken(user.id, user.role);
+    // Generate token with theme data
+    const token = await generateToken(user.id, user.role);
+    
+    // Get user's active theme
+    const activeTheme = await user.getEffectiveTheme();
 
     res.json({
       message: 'Login successful',
       user: user.toJSON(),
-      token
+      token,
+      activeTheme
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -113,8 +122,12 @@ router.get('/profile', authenticate, async (req, res) => {
       });
     }
 
+    // Get effective theme for the user
+    const effectiveTheme = await user.getEffectiveTheme();
+
     res.json({
-      user: user.toJSON()
+      user: user.toJSON(),
+      activeTheme: effectiveTheme
     });
   } catch (error) {
     console.error('Profile fetch error:', error);
@@ -205,6 +218,158 @@ router.put('/change-password', authenticate, validate(schemas.passwordChange), a
   }
 });
 
+// Select theme for current user
+router.put('/profile/theme', authenticate, async (req, res) => {
+  try {
+    const { themeId } = req.body;
+    
+    if (!themeId) {
+      return res.status(400).json({
+        error: 'Theme ID required',
+        message: 'Please provide a theme ID'
+      });
+    }
+    
+    const user = await User.findByPk(req.userId, {
+      attributes: ['id', 'hospitalId', 'selectedThemeId']
+    });
+    
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'User profile not found'
+      });
+    }
+    
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        error: 'No hospital assigned',
+        message: 'You must be assigned to a hospital to select themes'
+      });
+    }
+    
+    // Verify theme exists in hospital
+    const themeExistsForHospital = await themeExists(user.hospitalId, themeId);
+    if (!themeExistsForHospital) {
+      return res.status(400).json({
+        error: 'Invalid theme',
+        message: `Theme "${themeId}" does not exist in your hospital's themes`
+      });
+    }
+    
+    // Update user's theme selection
+    await user.update({ selectedThemeId: themeId });
+    
+    // Reload user to get updated data
+    await user.reload();
+    
+    // Generate new token with updated theme
+    const token = await generateToken(user.id, user.role);
+    
+    // Get the effective theme to return
+    const effectiveTheme = await user.getEffectiveTheme();
+    
+    res.json({
+      message: 'Theme selected successfully',
+      token,
+      activeTheme: effectiveTheme,
+      user: user.toJSON()
+    });
+  } catch (error) {
+    console.error('Theme selection error:', error);
+    res.status(500).json({
+      error: 'Theme selection failed',
+      message: error.message
+    });
+  }
+});
+
+// Reset theme to hospital default (clear personal selection)
+router.delete('/profile/theme', authenticate, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'User profile not found'
+      });
+    }
+    
+    // Clear personal theme selection
+    await user.update({ selectedThemeId: null });
+    
+    // Reload user to get updated data
+    await user.reload();
+    
+    // Generate new token with updated theme
+    const token = await generateToken(user.id, user.role);
+    
+    // Get the effective theme (should now be hospital default)
+    const effectiveTheme = await user.getEffectiveTheme();
+    
+    res.json({
+      message: 'Theme reset to hospital default',
+      token,
+      activeTheme: effectiveTheme,
+      user: user.toJSON()
+    });
+  } catch (error) {
+    console.error('Theme reset error:', error);
+    res.status(500).json({
+      error: 'Theme reset failed',
+      message: error.message
+    });
+  }
+});
+
+// Get available themes for current user's hospital
+router.get('/profile/themes', authenticate, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.userId, {
+      attributes: ['id', 'hospitalId', 'selectedThemeId']
+    });
+    
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'User profile not found'
+      });
+    }
+    
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        error: 'No hospital assigned',
+        message: 'You must be assigned to a hospital to view themes'
+      });
+    }
+    
+    const hospital = await Hospital.findByPk(user.hospitalId, {
+      attributes: ['id', 'themes', 'defaultThemeId']
+    });
+    
+    if (!hospital) {
+      return res.status(404).json({
+        error: 'Hospital not found',
+        message: 'Your assigned hospital does not exist'
+      });
+    }
+    
+    res.json({
+      themes: hospital.themes || [],
+      defaultThemeId: hospital.defaultThemeId,
+      defaultTheme: hospital.getDefaultTheme(),
+      selectedThemeId: user.selectedThemeId
+    });
+  } catch (error) {
+    console.error('Get themes error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch themes',
+      message: error.message
+    });
+  }
+});
+
 // Logout (client-side token removal)
 router.post('/logout', authenticate, (req, res) => {
   res.json({
@@ -223,11 +388,15 @@ router.post('/refresh', authenticate, async (req, res) => {
       });
     }
 
-    const token = generateToken(user.id, user.role);
+    const token = await generateToken(user.id, user.role);
+    
+    // Get user's active theme
+    const activeTheme = await user.getEffectiveTheme();
 
     res.json({
       message: 'Token refreshed successfully',
-      token
+      token,
+      activeTheme
     });
   } catch (error) {
     console.error('Token refresh error:', error);
