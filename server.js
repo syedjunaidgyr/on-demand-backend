@@ -51,7 +51,8 @@ app.use('/api/v1/tracking', require('./routes/tracking')); // Real-time tracking
 app.use('/api/v1/financial', require('./routes/financial')); // Financial dashboard routes
 app.use('/api/v1/performance', require('./routes/performance')); // Performance analytics routes
 app.use('/api/v1/permissions', require('./routes/permissions'));
-app.use('/api/v1/admin', require('./routes/admin')); // Admin routes for hospital/unit management
+app.use('/api/v1/admin', require('./routes/admin')); // Admin routes for hospital/unit management (full access)
+app.use('/api/v1/hospital-admin', require('./routes/hospitalAdmin')); // Hospital Admin routes (hospital-scoped)
 app.use('/api/v1/public', require('./routes/public')); // Public routes (no auth required)
 app.use('/api/v1/agency', require('./routes/agency')); // Agency routes
 

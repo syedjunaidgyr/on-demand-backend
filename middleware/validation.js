@@ -12,7 +12,7 @@ const schemas = {
     firstName: Joi.string().min(2).max(100).required(),
     lastName: Joi.string().min(2).max(100).required(),
     phone: Joi.string().pattern(/^[\+]?[1-9][\d]{0,15}$/).optional(),
-    role: Joi.string().valid('HR', 'DOCTOR', 'NURSE', 'ADMIN', 'AGENCY').required(),
+    role: Joi.string().valid('HR', 'DOCTOR', 'NURSE', 'ADMIN', 'AGENCY', 'HOSPITAL_ADMIN').required(),
     department: Joi.string().max(100).optional(),
     location: Joi.string().max(255).optional(),
     hospitalId: Joi.number().integer().positive().optional(),

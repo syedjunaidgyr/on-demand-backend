@@ -1,16 +1,121 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { Hospital, Unit } = require('../models');
+const { Hospital, Unit, User, Job, JobAssignment, CheckIn, sequelize } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 const { upload } = require('../utils/upload');
+const { validateTheme, generateUniqueThemeId } = require('../utils/themeHelpers');
+const { Op } = require('sequelize');
 
 const router = express.Router();
 
 // Apply authentication and ADMIN authorization to all routes
 router.use(authenticate);
 router.use(authorize('ADMIN'));
+
+// ==========================================
+// ADMIN DASHBOARD (System-wide)
+// ==========================================
+
+// Get system dashboard with all hospitals statistics
+router.get('/dashboard', async (req, res) => {
+  try {
+    // Get total hospitals
+    const totalHospitals = await Hospital.count();
+    const activeHospitals = await Hospital.count({ where: { isActive: true } });
+    
+    // Get total users
+    const totalUsers = await User.count();
+    const activeUsers = await User.count({ where: { isActive: true } });
+    
+    // Get users by role
+    const usersByRole = await User.findAll({
+      attributes: [
+        'role',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+      ],
+      group: ['role'],
+      raw: true
+    });
+    
+    // Get total jobs
+    const totalJobs = await Job.count();
+    const activeJobs = await Job.count({ 
+      where: { status: { [Op.in]: ['ACTIVE', 'ASSIGNED', 'IN_PROGRESS'] } } 
+    });
+    
+    // Get total assignments
+    const totalAssignments = await JobAssignment.count();
+    const activeAssignments = await JobAssignment.count({ 
+      where: { status: 'IN_PROGRESS' } 
+    });
+    
+    // Get total units across all hospitals
+    const totalUnits = await Unit.count();
+    const activeUnits = await Unit.count({ where: { isActive: true } });
+    
+    // Get recent hospitals
+    const recentHospitals = await Hospital.findAll({
+      limit: 10,
+      order: [['createdAt', 'DESC']],
+      attributes: ['id', 'name', 'code', 'isActive', 'createdAt']
+    });
+    
+    // Get top hospitals by job count
+    const topHospitals = await Job.findAll({
+      attributes: [
+        'hospitalId',
+        [sequelize.fn('COUNT', sequelize.col('Job.id')), 'jobCount']
+      ],
+      include: [{
+        model: Hospital,
+        as: 'hospital',
+        attributes: ['id', 'name', 'code']
+      }],
+      group: ['hospitalId', 'hospital.id'],
+      order: [[sequelize.literal('jobCount'), 'DESC']],
+      limit: 10,
+      raw: false
+    });
+    
+    res.json({
+      statistics: {
+        hospitals: {
+          total: totalHospitals,
+          active: activeHospitals,
+          inactive: totalHospitals - activeHospitals
+        },
+        users: {
+          total: totalUsers,
+          active: activeUsers,
+          byRole: usersByRole
+        },
+        jobs: {
+          total: totalJobs,
+          active: activeJobs,
+          completed: totalJobs - activeJobs
+        },
+        assignments: {
+          total: totalAssignments,
+          active: activeAssignments
+        },
+        units: {
+          total: totalUnits,
+          active: activeUnits
+        }
+      },
+      recentHospitals,
+      topHospitals
+    });
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch dashboard',
+      message: error.message
+    });
+  }
+});
 
 // Hospital CRUD operations
 
@@ -296,6 +401,258 @@ router.delete('/hospitals/:id/logo', async (req, res) => {
     console.error('Delete logo error:', error);
     res.status(500).json({
       error: 'Failed to delete logo',
+      message: error.message
+    });
+  }
+});
+
+// Theme Management endpoints
+
+// Get all themes for a hospital
+router.get('/hospitals/:id/themes', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const hospital = await Hospital.findByPk(id, {
+      attributes: ['id', 'themes', 'defaultThemeId']
+    });
+    
+    if (!hospital) {
+      return res.status(404).json({
+        error: 'Hospital not found'
+      });
+    }
+    
+    res.json({
+      hospital: {
+        id: hospital.id,
+        defaultThemeId: hospital.defaultThemeId
+      },
+      themes: hospital.themes || [],
+      defaultTheme: hospital.getDefaultTheme()
+    });
+  } catch (error) {
+    console.error('Get themes error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch themes',
+      message: error.message
+    });
+  }
+});
+
+// Create a new theme for a hospital
+router.post('/hospitals/:id/themes', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const hospital = await Hospital.findByPk(id, {
+      attributes: ['id', 'themes']
+    });
+    
+    if (!hospital) {
+      return res.status(404).json({
+        error: 'Hospital not found'
+      });
+    }
+    
+    const themeData = req.body;
+    
+    // Validate the theme
+    const validation = validateTheme(themeData);
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: 'Invalid theme data',
+        message: validation.error
+      });
+    }
+    
+    // Generate ID if not provided
+    if (!themeData.id) {
+      themeData.id = generateUniqueThemeId(hospital.themes || []);
+    }
+    
+    // Check if theme ID already exists
+    const existingTheme = hospital.getThemeById(themeData.id);
+    if (existingTheme) {
+      return res.status(400).json({
+        error: 'Theme already exists',
+        message: `A theme with ID "${themeData.id}" already exists`
+      });
+    }
+    
+    // Add new theme to themes array
+    const updatedThemes = [...(hospital.themes || []), themeData];
+    
+    await hospital.update({ themes: updatedThemes });
+    
+    res.status(201).json({
+      message: 'Theme created successfully',
+      theme: themeData,
+      hospital: hospital.toJSON()
+    });
+  } catch (error) {
+    console.error('Create theme error:', error);
+    res.status(500).json({
+      error: 'Failed to create theme',
+      message: error.message
+    });
+  }
+});
+
+// Update an existing theme
+router.put('/hospitals/:id/themes/:themeId', async (req, res) => {
+  try {
+    const { id, themeId } = req.params;
+    const hospital = await Hospital.findByPk(id, {
+      attributes: ['id', 'themes']
+    });
+    
+    if (!hospital) {
+      return res.status(404).json({
+        error: 'Hospital not found'
+      });
+    }
+    
+    const existingTheme = hospital.getThemeById(themeId);
+    if (!existingTheme) {
+      return res.status(404).json({
+        error: 'Theme not found',
+        message: `Theme with ID "${themeId}" does not exist`
+      });
+    }
+    
+    // Validate updated theme data
+    const updatedTheme = { ...existingTheme, ...req.body };
+    const validation = validateTheme(updatedTheme);
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: 'Invalid theme data',
+        message: validation.error
+      });
+    }
+    
+    // Prevent changing theme ID
+    if (updatedTheme.id !== themeId) {
+      return res.status(400).json({
+        error: 'Cannot change theme ID',
+        message: 'Theme ID cannot be modified'
+      });
+    }
+    
+    // Update theme in array
+    const updatedThemes = hospital.themes.map(theme => 
+      theme.id === themeId ? updatedTheme : theme
+    );
+    
+    await hospital.update({ themes: updatedThemes });
+    
+    res.json({
+      message: 'Theme updated successfully',
+      theme: updatedTheme,
+      hospital: hospital.toJSON()
+    });
+  } catch (error) {
+    console.error('Update theme error:', error);
+    res.status(500).json({
+      error: 'Failed to update theme',
+      message: error.message
+    });
+  }
+});
+
+// Delete a theme
+router.delete('/hospitals/:id/themes/:themeId', async (req, res) => {
+  try {
+    const { id, themeId } = req.params;
+    const hospital = await Hospital.findByPk(id, {
+      attributes: ['id', 'themes', 'defaultThemeId']
+    });
+    
+    if (!hospital) {
+      return res.status(404).json({
+        error: 'Hospital not found'
+      });
+    }
+    
+    const existingTheme = hospital.getThemeById(themeId);
+    if (!existingTheme) {
+      return res.status(404).json({
+        error: 'Theme not found',
+        message: `Theme with ID "${themeId}" does not exist`
+      });
+    }
+    
+    // Prevent deleting the default theme
+    if (hospital.defaultThemeId === themeId) {
+      return res.status(400).json({
+        error: 'Cannot delete default theme',
+        message: 'You must set a different default theme before deleting this one'
+      });
+    }
+    
+    // Filter out the theme
+    const updatedThemes = hospital.themes.filter(theme => theme.id !== themeId);
+    
+    // Must have at least one theme
+    if (updatedThemes.length === 0) {
+      return res.status(400).json({
+        error: 'Cannot delete last theme',
+        message: 'Hospital must have at least one theme'
+      });
+    }
+    
+    await hospital.update({ themes: updatedThemes });
+    
+    // Set selectedThemeId to null for users who had this theme selected
+    await User.update(
+      { selectedThemeId: null },
+      { where: { hospitalId: id, selectedThemeId: themeId } }
+    );
+    
+    res.json({
+      message: 'Theme deleted successfully',
+      hospital: hospital.toJSON()
+    });
+  } catch (error) {
+    console.error('Delete theme error:', error);
+    res.status(500).json({
+      error: 'Failed to delete theme',
+      message: error.message
+    });
+  }
+});
+
+// Set default theme for a hospital
+router.put('/hospitals/:id/themes/default/:themeId', async (req, res) => {
+  try {
+    const { id, themeId } = req.params;
+    const hospital = await Hospital.findByPk(id, {
+      attributes: ['id', 'themes', 'defaultThemeId']
+    });
+    
+    if (!hospital) {
+      return res.status(404).json({
+        error: 'Hospital not found'
+      });
+    }
+    
+    const theme = hospital.getThemeById(themeId);
+    if (!theme) {
+      return res.status(404).json({
+        error: 'Theme not found',
+        message: `Theme with ID "${themeId}" does not exist`
+      });
+    }
+    
+    await hospital.update({ defaultThemeId: themeId });
+    
+    res.json({
+      message: 'Default theme updated successfully',
+      defaultTheme: theme,
+      hospital: hospital.toJSON()
+    });
+  } catch (error) {
+    console.error('Set default theme error:', error);
+    res.status(500).json({
+      error: 'Failed to set default theme',
       message: error.message
     });
   }
