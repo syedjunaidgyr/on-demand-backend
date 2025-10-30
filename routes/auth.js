@@ -2,7 +2,7 @@ const express = require('express');
 const { User } = require('../models');
 const { generateToken, authenticate } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
-const { sendNotifications } = require('../utils/notifications');
+const { sendNotifications, formatHuman } = require('../utils/notifications');
 
 const router = express.Router();
 
@@ -183,13 +183,13 @@ router.put('/change-password', authenticate, validate(schemas.passwordChange), a
     await sendNotifications('PasswordChanged_User', [{
       userId: String(user.id),
       userType: (user.role || '').toLowerCase(),
-      placeholders: { changedAt: new Date().toISOString() }
+      placeholders: { changedAt: formatHuman(new Date()) }
     }]);
     // Admin/HR audit copy
     await sendNotifications('PasswordChanged_AdminAudit', [{
       userId: String(user.id),
       userType: 'hr',
-      placeholders: { email: user.email, changedAt: new Date().toISOString() }
+      placeholders: { email: user.email, changedAt: formatHuman(new Date()) }
     }]);
   } catch (e) {}
 

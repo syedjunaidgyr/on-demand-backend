@@ -3,7 +3,7 @@ const { Op } = require('sequelize');
 const { User, Job, JobAssignment, CheckIn, Hospital } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
-const { sendNotifications } = require('../utils/notifications');
+const { sendNotifications, formatHuman } = require('../utils/notifications');
 const { isStaffCompatibleWithJob } = require('../utils/helpers');
 const { isCheckInAllowed } = require('../utils/dateTimeHelpers');
 
@@ -419,7 +419,7 @@ router.post('/assignments/:id/respond', validate(schemas.jobAcceptance), async (
 
       // Confirm to staff
       try {
-        await sendNotifications('AssignmentAccepted_ConfirmUser', [{
+      await sendNotifications('AssignmentAccepted_ConfirmUser', [{
           userId: String(req.userId),
           userType: (req.user.role || '').toLowerCase(),
           placeholders: { jobTitle: assignment.job.title }
@@ -452,7 +452,7 @@ router.post('/assignments/:id/respond', validate(schemas.jobAcceptance), async (
 
       // Confirm to staff
       try {
-        await sendNotifications('AssignmentRejected_ConfirmUser', [{
+      await sendNotifications('AssignmentRejected_ConfirmUser', [{
           userId: String(req.userId),
           userType: (req.user.role || '').toLowerCase(),
           placeholders: { jobTitle: assignment.job.title, rejectionReason: rejectionReason || '' }
@@ -628,7 +628,7 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
       await sendNotifications('CheckIn_ConfirmUser', [{
         userId: String(req.userId),
         userType: (req.user.role || '').toLowerCase(),
-        placeholders: { jobTitle: assignment.job.title, checkInTime: checkIn.checkInTime.toISOString() }
+        placeholders: { jobTitle: assignment.job.title, checkInTime: formatHuman(checkIn.checkInTime) }
       }]);
     } catch (e) {}
 
@@ -639,7 +639,7 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
         await sendNotifications('CheckIn_NotifyHR', [{
           userId: String(assignmentWithAssigner.assigner.id),
           userType: (assignmentWithAssigner.assigner.role || 'hr').toLowerCase(),
-          placeholders: { staffName: `${user.firstName} ${user.lastName}`, jobTitle: assignment.job.title, checkInTime: checkIn.checkInTime.toISOString() }
+          placeholders: { staffName: `${user.firstName} ${user.lastName}`, jobTitle: assignment.job.title, checkInTime: formatHuman(checkIn.checkInTime) }
         }]);
       }
     } catch (e) {}
@@ -765,7 +765,7 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
       await sendNotifications('CheckOut_ConfirmUser', [{
         userId: String(req.userId),
         userType: (req.user.role || '').toLowerCase(),
-        placeholders: { jobTitle: assignment.job.title, checkOutTime: checkOutTime.toISOString(), totalWorkTime: String(workTime) }
+        placeholders: { jobTitle: assignment.job.title, checkOutTime: formatHuman(checkOutTime), totalWorkTime: String(workTime) }
       }]);
     } catch (e) {}
 
@@ -776,7 +776,7 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
         await sendNotifications('CheckOut_NotifyHR', [{
           userId: String(assignmentWithAssigner.assigner.id),
           userType: (assignmentWithAssigner.assigner.role || 'hr').toLowerCase(),
-          placeholders: { staffName: `${userForCheckOut.firstName} ${userForCheckOut.lastName}`, jobTitle: assignment.job.title, checkOutTime: checkOutTime.toISOString(), totalWorkTime: String(workTime) }
+          placeholders: { staffName: `${userForCheckOut.firstName} ${userForCheckOut.lastName}`, jobTitle: assignment.job.title, checkOutTime: formatHuman(checkOutTime), totalWorkTime: String(workTime) }
         }]);
       }
     } catch (e) {}
