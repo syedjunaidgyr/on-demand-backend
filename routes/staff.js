@@ -74,6 +74,8 @@ router.get('/jobs/available', async (req, res) => {
         [Op.gte]: new Date() // Only future jobs
       }
     };
+    // Exclude agency-created jobs from staff listings
+    whereClause['$creator.role$'] = { [Op.ne]: 'AGENCY' };
     
     // For doctors, also filter by specialization
     if (req.user.role === 'DOCTOR' && req.user.specialization) {
@@ -136,7 +138,7 @@ router.get('/jobs/available', async (req, res) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email']
+          attributes: ['id', 'firstName', 'lastName', 'email', 'role']
         },
         {
           model: Hospital,

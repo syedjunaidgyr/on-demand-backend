@@ -298,7 +298,11 @@ router.get('/assignments', async (req, res) => {
 // Create new job posting
 router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
   try {
-    const { hospitalId, unitCode, department, specialization } = req.body;
+    const { hospitalId, unitCode, department } = req.body;
+
+    // Normalize requiredRole: allow 'AGENCY' as an alias for 'NURSE'
+    const requestedRole = (req.body.requiredRole || '').toUpperCase();
+    const normalizedRequiredRole = requestedRole;
     
     // Validate hospitalId + unitCode pair exists and active
     const unit = await Unit.findOne({ where: { hospitalId, unitCode, isActive: true } });
@@ -311,7 +315,7 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
 
     // Validate department and specialization consistency
     try {
-      validateDepartmentSpecialization(department, specialization, req.body.requiredRole);
+      validateDepartmentSpecialization(department, req.body.specialization, normalizedRequiredRole);
     } catch (validationError) {
       return res.status(400).json({
         error: 'Invalid department/specialization combination',
@@ -321,8 +325,18 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
 
     const jobData = {
       ...req.body,
+      requiredRole: normalizedRequiredRole,
       createdBy: req.userId
     };
+
+    // If publishing for an agency, set creator to that agency so nurses will not see it in open listings
+    if (requestedRole === 'AGENCY' && req.body.agencyId) {
+      const agencyUser = await User.findByPk(req.body.agencyId);
+      if (!agencyUser || agencyUser.role !== 'AGENCY') {
+        return res.status(400).json({ error: 'Invalid agencyId', message: 'agencyId must be a valid AGENCY user' });
+      }
+      jobData.createdBy = agencyUser.id;
+    }
     console.log("jobData: ", jobData);
 
     const job = await Job.create(jobData);
@@ -482,7 +496,7 @@ router.get('/jobs', async (req, res) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email'],
+          attributes: ['id', 'firstName', 'lastName', 'email', 'role'],
           required: false // LEFT JOIN - include jobs even if creator is missing
         },
         {
