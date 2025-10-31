@@ -198,7 +198,9 @@ async function fixThemesAndSetDefaults() {
     console.error('❌ Error during theme fix and default setup:', error);
     throw error;
   } finally {
-    await sequelize.close();
+    if (!process.env.NO_CLOSE_SEQUELIZE) {
+      await sequelize.close();
+    }
   }
 }
 
