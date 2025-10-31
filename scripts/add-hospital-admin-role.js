@@ -40,7 +40,9 @@ async function addHospitalAdminRole() {
     console.error('❌ Error adding hospital admin role:', error);
     throw error;
   } finally {
-    await sequelize.close();
+    if (!process.env.NO_CLOSE_SEQUELIZE) {
+      await sequelize.close();
+    }
   }
 }
 
