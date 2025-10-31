@@ -1,0 +1,398 @@
+{
+  "info": {
+    "name": "Theme Management API",
+    "description": "Theme management endpoints for hospital themes and user theme selection.\n\n📖 Complete documentation: See THEME_MANAGEMENT_COMPLETE_GUIDE.md\n\nQuick Start:\n1. Run: node scripts/add-theme-columns.js\n2. Run: node scripts/fix-themes-and-set-defaults.js\n3. Import this collection and set jwt_token variable",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{jwt_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "jwt_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "hospital_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "theme_id",
+      "value": "default",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Admin - Hospital Theme Management",
+      "item": [
+        {
+          "name": "Get All Themes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has themes array\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('themes');",
+                  "    pm.expect(jsonData.themes).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/hospitals/{{hospital_id}}/themes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "hospitals", "{{hospital_id}}", "themes"]
+            },
+            "description": "Get all available themes for a hospital"
+          },
+          "response": []
+        },
+        {
+          "name": "Create New Theme",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 201\", function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test(\"Theme created successfully\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('theme');",
+                  "    pm.expect(jsonData.message).to.include('created successfully');",
+                  "});",
+                  "",
+                  "// Store theme ID if needed",
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.theme) {",
+                  "    pm.collectionVariables.set('theme_id', jsonData.theme.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Medical Green\",\n  \"primaryColor\": \"#059669\",\n  \"secondaryColor\": \"#10b981\",\n  \"backgroundColor\": \"#f0fdf4\",\n  \"textColor\": \"#064e3b\",\n  \"accentTextColor\": \"#ffffff\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/hospitals/{{hospital_id}}/themes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "hospitals", "{{hospital_id}}", "themes"]
+            },
+            "description": "Create a new theme for the hospital"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Theme",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Theme updated successfully\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('theme');",
+                  "    pm.expect(jsonData.message).to.include('updated successfully');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Theme Name\",\n  \"primaryColor\": \"#2563eb\",\n  \"secondaryColor\": \"#3b82f6\",\n  \"backgroundColor\": \"#f8fafc\",\n  \"textColor\": \"#1e293b\",\n  \"accentTextColor\": \"#ffffff\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/hospitals/{{hospital_id}}/themes/{{theme_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "hospitals", "{{hospital_id}}", "themes", "{{theme_id}}"]
+            },
+            "description": "Update an existing theme (theme ID cannot be changed)"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Theme",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Theme deleted successfully\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.message).to.include('deleted successfully');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/hospitals/{{hospital_id}}/themes/{{theme_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "hospitals", "{{hospital_id}}", "themes", "{{theme_id}}"]
+            },
+            "description": "Delete a theme (cannot delete default theme or last theme)"
+          },
+          "response": []
+        },
+        {
+          "name": "Set Default Theme",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Default theme updated\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('defaultTheme');",
+                  "    pm.expect(jsonData.message).to.include('Default theme updated');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/admin/hospitals/{{hospital_id}}/themes/default/{{theme_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "admin", "hospitals", "{{hospital_id}}", "themes", "default", "{{theme_id}}"]
+            },
+            "description": "Set a specific theme as the hospital's default theme"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User - Theme Selection",
+      "item": [
+        {
+          "name": "Get Available Themes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has themes array\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('themes');",
+                  "    pm.expect(jsonData.themes).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Store first available theme ID",
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.themes && jsonData.themes.length > 0) {",
+                  "    pm.collectionVariables.set('theme_id', jsonData.themes[0].id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/profile/themes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "profile", "themes"]
+            },
+            "description": "Get all available themes for the current user's hospital"
+          },
+          "response": []
+        },
+        {
+          "name": "Select Theme",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Theme selected successfully\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('activeTheme');",
+                  "    pm.expect(jsonData).to.have.property('token');",
+                  "    pm.expect(jsonData.message).to.include('selected successfully');",
+                  "});",
+                  "",
+                  "// Store new token with updated theme",
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.token) {",
+                  "    pm.collectionVariables.set('jwt_token', jsonData.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"themeId\": \"{{theme_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/profile/theme",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "profile", "theme"]
+            },
+            "description": "Select a personal theme for the current user"
+          },
+          "response": []
+        },
+        {
+          "name": "Reset Theme to Default",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Theme reset successfully\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('activeTheme');",
+                  "    pm.expect(jsonData).to.have.property('token');",
+                  "    pm.expect(jsonData.message).to.include('reset to hospital default');",
+                  "});",
+                  "",
+                  "// Store new token with updated theme",
+                  "const jsonData = pm.response.json();",
+                  "if (jsonData.token) {",
+                  "    pm.collectionVariables.set('jwt_token', jsonData.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/profile/theme",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "profile", "theme"]
+            },
+            "description": "Clear personal theme selection and use hospital's default theme"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Profile with Active Theme",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Profile includes active theme\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('user');",
+                  "    pm.expect(jsonData).to.have.property('activeTheme');",
+                  "    pm.expect(jsonData.activeTheme).to.be.an('object');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "profile"]
+            },
+            "description": "Get user profile with the currently active theme"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Pre-request Scripts",
+      "item": []
+    }
+  ]
+}
+

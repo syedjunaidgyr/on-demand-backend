@@ -99,6 +99,61 @@ const Hospital = sequelize.define('Hospital', {
     type: DataTypes.STRING(500),
     allowNull: true,
     comment: 'Path to hospital logo image file'
+  },
+  themes: {
+    type: DataTypes.JSON,
+    allowNull: false,
+    defaultValue: [
+      {
+        id: 'default',
+        name: 'Professional Blue',
+        primaryColor: '#2563eb',
+        secondaryColor: '#3b82f6',
+        backgroundColor: '#f8fafc',
+        textColor: '#1e293b',
+        accentTextColor: '#ffffff'
+      }
+    ],
+    validate: {
+      isValidThemes(value) {
+        if (!Array.isArray(value) || value.length === 0) {
+          throw new Error('Themes must be a non-empty array');
+        }
+        
+        // Validate each theme object
+        for (const theme of value) {
+          if (!theme.id || typeof theme.id !== 'string') {
+            throw new Error('Each theme must have an id (string)');
+          }
+          if (!theme.name || typeof theme.name !== 'string') {
+            throw new Error('Each theme must have a name (string)');
+          }
+          
+          // Validate color fields
+          const requiredColors = ['primaryColor', 'secondaryColor', 'backgroundColor', 'textColor', 'accentTextColor'];
+          for (const colorField of requiredColors) {
+            if (!theme[colorField] || typeof theme[colorField] !== 'string') {
+              throw new Error(`Each theme must have ${colorField} (string)`);
+            }
+            // Validate hex color format
+            if (!/^#[0-9A-Fa-f]{6}$/.test(theme[colorField])) {
+              throw new Error(`${colorField} must be a valid hex color (e.g., #2563eb)`);
+            }
+          }
+        }
+        
+        // Check for duplicate IDs
+        const ids = value.map(t => t.id);
+        if (new Set(ids).size !== ids.length) {
+          throw new Error('Theme IDs must be unique');
+        }
+      }
+    }
+  },
+  defaultThemeId: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+    comment: 'ID of the default theme. Users without personal theme selection will use this.'
   }
 }, {
   tableName: 'hospitals',
@@ -115,5 +170,22 @@ const Hospital = sequelize.define('Hospital', {
     }
   ]
 });
+
+// Instance method to get a specific theme by ID
+Hospital.prototype.getThemeById = function(themeId) {
+  if (!this.themes || !Array.isArray(this.themes)) {
+    return null;
+  }
+  return this.themes.find(theme => theme.id === themeId) || null;
+};
+
+// Instance method to get the default theme
+Hospital.prototype.getDefaultTheme = function() {
+  if (!this.defaultThemeId) {
+    // If no default set, return first theme
+    return (this.themes && this.themes.length > 0) ? this.themes[0] : null;
+  }
+  return this.getThemeById(this.defaultThemeId);
+};
 
 module.exports = Hospital;
