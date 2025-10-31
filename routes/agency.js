@@ -497,13 +497,64 @@ router.get('/:agencyId/nurses', authenticate, authorize('ADMIN', 'HR', 'AGENCY')
       return res.status(403).json({ error: 'Access denied', message: 'Cannot view other agency' });
     }
     const where = { agencyId };
-    if (req.user.role === 'AGENCY') where.status = 'APPROVED';
     if (status) where.status = status;
     const pool = await AgencyNurse.findAll({ where, include: [{ model: User, as: 'nurse', attributes: { exclude: ['password'] } }] });
     return res.json({ pool, nurses: pool.map(p => p.nurse) });
   } catch (error) {
     console.error('Get nurse pool error:', error);
     return res.status(500).json({ error: 'Failed to fetch nurses', message: error.message });
+  }
+});
+
+// List all nurses available for onboarding (not in any agency and not currently on a job)
+router.get('/:agencyId/nurses/available', authenticate, authorize('ADMIN', 'HR', 'AGENCY'), async (req, res) => {
+  try {
+    const { agencyId } = req.params;
+    if (req.user.role === 'AGENCY' && req.user.id !== parseInt(agencyId)) {
+      return res.status(403).json({ error: 'Access denied', message: 'Cannot view other agency' });
+    }
+
+    // Get all nurse IDs who are in any active agency membership
+    const activeMemberships = await AgencyNurse.findAll({
+      where: { status: ['PENDING', 'APPROVED'] },
+      attributes: ['nurseId']
+    });
+    const inactiveNurseIds = activeMemberships.map(m => m.nurseId);
+
+    // Get all nurse IDs who are currently on a job
+    const activeJobs = await JobAssignment.findAll({
+      where: { status: ['ASSIGNED', 'IN_PROGRESS'] },
+      attributes: ['userId']
+    });
+    const busyNurseIds = activeJobs.map(j => j.userId);
+
+    // Combine excluded nurse IDs
+    const excludedNurseIds = [...new Set([...inactiveNurseIds, ...busyNurseIds])];
+
+    // Get all available nurses (NURSE role, active, not in excluded list)
+    const where = {
+      role: 'NURSE',
+      isActive: true
+    };
+    
+    if (excludedNurseIds.length > 0) {
+      where.id = { [Op.notIn]: excludedNurseIds };
+    }
+
+    const availableNurses = await User.findAll({
+      where,
+      attributes: { exclude: ['password'] },
+      order: [['firstName', 'ASC'], ['lastName', 'ASC']]
+    });
+
+    return res.json({
+      availableNurses,
+      count: availableNurses.length,
+      excludedCount: excludedNurseIds.length
+    });
+  } catch (error) {
+    console.error('Get available nurses error:', error);
+    return res.status(500).json({ error: 'Failed to fetch available nurses', message: error.message });
   }
 });
 

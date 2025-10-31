@@ -165,7 +165,7 @@ router.post('/jobs/:id/select-candidate', async (req, res) => {
 
 // Apply authentication and HR authorization to all routes
 router.use(authenticate);
-router.use(authorize('HR', 'ADMIN'));
+router.use(authorize('HR', 'ADMIN', 'AGENCY'));
 
 // Get all users (HR can view all staff)
 router.get('/users', validate(schemas.pagination, 'query'), async (req, res) => {
@@ -173,16 +173,21 @@ router.get('/users', validate(schemas.pagination, 'query'), async (req, res) => 
     const { page, limit, sortBy = 'createdAt', sortOrder = 'DESC' } = req.query;
     const offset = (page - 1) * limit;
 
+    const whereConditions = {};
+    
+    // Agencies can only view NURSE users
+    if (req.user.role === 'AGENCY') {
+      whereConditions.role = 'NURSE';
+    } else {
+      whereConditions.role = { [Op.in]: ['DOCTOR', 'NURSE'] };
+    }
+
     const { count, rows: users } = await User.findAndCountAll({
       attributes: { exclude: ['password'] },
       limit: parseInt(limit),
       offset: parseInt(offset),
       order: [[sortBy, sortOrder]],
-      where: {
-        role: {
-          [Op.in]: ['DOCTOR', 'NURSE']
-        }
-      }
+      where: whereConditions
     });
 
     res.json({
@@ -214,6 +219,14 @@ router.get('/users/:id', async (req, res) => {
       return res.status(404).json({
         error: 'User not found',
         message: 'User does not exist'
+      });
+    }
+
+    // Agencies can only view NURSE users
+    if (req.user.role === 'AGENCY' && user.role !== 'NURSE') {
+      return res.status(403).json({
+        error: 'Access denied',
+        message: 'Agencies can only view NURSE users'
       });
     }
 
