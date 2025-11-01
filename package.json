@@ -15,6 +15,8 @@
     "fix-themes": "node scripts/fix-themes-and-set-defaults.js",
     "setup-themes": "npm run add-theme-columns && npm run add-hospital-admin-role",
     "setup-all": "npm run add-theme-columns && npm run add-hospital-admin-role && npm run fix-themes",
+    "setup-bangalore-hospitals": "node scripts/setup-bangalore-hospitals.js",
+    "delete-non-bangalore-hospitals": "node scripts/delete-non-bangalore-hospitals.js",
     "migrate": "npx sequelize-cli db:migrate",
     "seed": "npx sequelize-cli db:seed:all"
   },
