@@ -722,7 +722,7 @@ router.get('/jobs', async (req, res) => {
         {
           model: JobAssignment,
           as: 'assignments',
-          attributes: ['id', 'userId', 'status', 'assignedAt'],
+          attributes: ['id', 'userId', 'status', [Job.sequelize.literal('`assignments`.`created_at`'), 'assignedAt']],
           include: [{
             model: User,
             as: 'user',

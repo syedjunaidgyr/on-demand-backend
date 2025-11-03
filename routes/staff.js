@@ -276,7 +276,19 @@ router.get('/assignments', async (req, res) => {
         {
           model: Job,
           as: 'job',
-          attributes: ['id', 'title', 'department', 'location', 'startDate', 'endDate', 'startTime', 'endTime', 'facilityName', 'facilityAddress']
+          // Include all job fields - no attributes restriction
+          include: [
+            {
+              model: Hospital,
+              as: 'hospital',
+              attributes: ['id', 'name', 'code', 'address']
+            },
+            {
+              model: User,
+              as: 'creator',
+              attributes: ['id', 'firstName', 'lastName', 'email']
+            }
+          ]
         },
         {
           model: User,

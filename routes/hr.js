@@ -1284,4 +1284,135 @@ router.get('/jobs/:id/compatible-staff', async (req, res) => {
   }
 });
 
+  // Minimal payout report
+  router.get('/reports/payout', async (req, res) => {
+    try {
+      const { startDate, endDate, userId, jobId } = req.query;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          error: 'Missing required parameters',
+          message: 'startDate and endDate are required (YYYY-MM-DD)'
+        });
+      }
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      // Include entire end day
+      end.setHours(23, 59, 59, 999);
+
+      // Fetch jobs in period (by job startDate overlap) with assignments and check-ins
+      const jobs = await Job.findAll({
+        where: {
+          startDate: { [Op.lte]: end },
+          endDate: { [Op.gte]: start },
+          ...(jobId ? { id: jobId } : {})
+        },
+        attributes: ['id', 'title', 'hourlyRate', 'startDate', 'endDate'],
+        include: [
+          {
+            model: JobAssignment,
+            as: 'assignments',
+            attributes: ['id', 'userId', 'createdAt'],
+            include: [
+              {
+                model: User,
+                as: 'user',
+                attributes: ['id', 'firstName', 'lastName']
+              },
+              {
+                model: CheckIn,
+                as: 'checkIns',
+                attributes: ['id', 'checkInTime', 'checkOutTime']
+              }
+            ],
+            ...(userId ? { where: { userId } } : {})
+          }
+        ],
+        order: [['id', 'ASC']]
+      });
+
+      const lines = [];
+
+      for (const job of jobs) {
+        for (const assignment of job.assignments || []) {
+          const validCheckIns = (assignment.checkIns || []).filter(ci => ci.checkInTime && ci.checkOutTime);
+
+          // Consider only check-ins that intersect the requested range
+          const inRange = validCheckIns.filter(ci => {
+            const ciStart = new Date(ci.checkInTime);
+            const ciEnd = new Date(ci.checkOutTime);
+            return ciEnd >= start && ciStart <= end;
+          });
+
+          if (inRange.length === 0) continue;
+
+          // Sum minutes of intersection with range
+          let minutesWorked = 0;
+          for (const ci of inRange) {
+            const ciStart = new Date(ci.checkInTime);
+            const ciEnd = new Date(ci.checkOutTime);
+            const segStart = ciStart < start ? start : ciStart;
+            const segEnd = ciEnd > end ? end : ciEnd;
+            const diffMs = segEnd - segStart;
+            if (diffMs > 0) minutesWorked += Math.floor(diffMs / 60000);
+          }
+
+          if (minutesWorked <= 0) continue;
+
+          const hoursWorked = minutesWorked / 60;
+          const hourlyRate = Number(job.hourlyRate) || 0;
+          const amount = Number((hoursWorked * hourlyRate).toFixed(2));
+
+          const shiftDates = Array.from(new Set(inRange.map(ci => new Date(ci.checkInTime).toISOString().slice(0, 10))));
+
+          lines.push({
+            jobId: job.id,
+            jobTitle: job.title,
+            assignmentId: assignment.id,
+            userId: assignment.user?.id,
+            staffName: assignment.user ? `${assignment.user.firstName} ${assignment.user.lastName}` : '',
+            shiftDates,
+            minutesWorked,
+            hoursWorked,
+            hourlyRate,
+            amount
+          });
+        }
+      }
+
+      // Totals by user and grand total
+      const totalsByUser = {};
+      let grandTotal = 0;
+      for (const line of lines) {
+        grandTotal += line.amount;
+        const key = String(line.userId || 'unknown');
+        if (!totalsByUser[key]) {
+          totalsByUser[key] = {
+            userId: line.userId,
+            staffName: line.staffName,
+            amount: 0
+          };
+        }
+        totalsByUser[key].amount = Number((totalsByUser[key].amount + line.amount).toFixed(2));
+      }
+
+      res.json({
+        period: { startDate, endDate },
+        filters: { userId: userId || null, jobId: jobId || null },
+        lines,
+        totals: {
+          byUser: Object.values(totalsByUser),
+          grandTotal: Number(grandTotal.toFixed(2))
+        }
+      });
+    } catch (error) {
+      console.error('Payout report error:', error);
+      res.status(500).json({
+        error: 'Failed to generate payout report',
+        message: error.message
+      });
+    }
+  });
+
 module.exports = router;

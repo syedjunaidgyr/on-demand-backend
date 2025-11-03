@@ -203,11 +203,11 @@ User.prototype.getEffectiveTheme = async function() {
   }
   
   // Get hospital with themes (avoid circular dependency by using sequelize)
-  const { sequelize } = require('../config/database');
+  const sequelize = require('../config/database');
   const { QueryTypes } = require('sequelize');
   
   const [hospitalData] = await sequelize.query(`
-    SELECT themes, defaultThemeId 
+    SELECT themes, default_theme_id as defaultThemeId 
     FROM hospitals 
     WHERE id = :hospitalId
   `, {
