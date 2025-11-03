@@ -27,7 +27,7 @@ const Job = sequelize.define('Job', {
     allowNull: false
   },
   requiredRole: {
-    type: DataTypes.ENUM('DOCTOR', 'NURSE'),
+    type: DataTypes.ENUM('DOCTOR', 'NURSE', 'AGENCY'),
     allowNull: false
   },
   specialization: {

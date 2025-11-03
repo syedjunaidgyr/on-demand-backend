@@ -569,7 +569,7 @@ router.get('/jobs', authenticate, authorize('AGENCY'), async (req, res) => {
   const jobs = await Job.findAll({
       where: {
         hospitalId: { [Op.in]: hospitalIds },
-        requiredRole: 'NURSE',
+        requiredRole: { [Op.in]: ['NURSE', 'AGENCY'] },
         status: 'ACTIVE'
       },
       include: [

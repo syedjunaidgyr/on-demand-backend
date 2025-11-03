@@ -116,7 +116,7 @@ const schemas = {
     description: Joi.string().required(),
     department: Joi.string().max(100).required(),
     location: Joi.string().max(255).required(),
-    requiredRole: Joi.string().valid('DOCTOR', 'NURSE').required(),
+    requiredRole: Joi.string().valid('DOCTOR', 'NURSE', 'AGENCY').required(),
     specialization: Joi.string().max(255).when('requiredRole', {
       is: 'DOCTOR',
       then: Joi.required().messages({
@@ -159,7 +159,7 @@ const schemas = {
     description: Joi.string().optional(),
     department: Joi.string().max(100).optional(),
     location: Joi.string().max(255).optional(),
-    requiredRole: Joi.string().valid('DOCTOR', 'NURSE').optional(),
+    requiredRole: Joi.string().valid('DOCTOR', 'NURSE', 'AGENCY').optional(),
     specialization: Joi.string().max(255).optional(),
     startDate: Joi.date().optional(),
     endDate: Joi.date().optional(),
