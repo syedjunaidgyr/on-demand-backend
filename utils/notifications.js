@@ -36,7 +36,7 @@ const TEMPLATE_IDS = {
 };
 
 // const NOTIFICATION_BASE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://192.168.1.79:3020';
-const NOTIFICATION_BASE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://192.168.1.8:3020';
+const NOTIFICATION_BASE_URL = process.env.NOTIFICATION_SERVICE_URL || 'http://192.168.1.52:3020';
 
 async function sendNotifications(templateName, notificationsPayload) {
   const templateId = TEMPLATE_IDS[templateName];

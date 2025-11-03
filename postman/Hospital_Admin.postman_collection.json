@@ -1,0 +1,107 @@
+{
+  "info": {
+    "name": "Hospital Admin APIs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
+    { "key": "token", "value": "" },
+    { "key": "hospitalId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Auth - Register Hospital Admin",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"hospital.admin@example.com\",\n  \"password\": \"StrongPass123!\",\n  \"confirmPassword\": \"StrongPass123!\",\n  \"firstName\": \"Hospital\",\n  \"lastName\": \"Admin\",\n  \"role\": \"HOSPITAL_ADMIN\",\n  \"hospitalId\": {{hospitalId}}\n}"
+        },
+        "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth","register"] }
+      }
+    },
+    {
+      "name": "Auth - Login (Hospital Admin)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "  const res = pm.response.json();",
+              "  pm.collectionVariables.set('token', res.token);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Content-Type", "value": "application/json" } ],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"hospital.admin@example.com\",\n  \"password\": \"StrongPass123!\"\n}" },
+        "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth","login"] }
+      }
+    },
+    {
+      "name": "Hospital Admin - Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/hospital-admin/dashboard", "host": ["{{baseUrl}}"], "path": ["hospital-admin","dashboard"] }
+      }
+    },
+    {
+      "name": "Hospital Admin - Hospital Details",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/hospital-admin/hospital", "host": ["{{baseUrl}}"], "path": ["hospital-admin","hospital"] }
+      }
+    },
+    {
+      "name": "Hospital Admin - List Users",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/hospital-admin/users?page=1&limit=50", "host": ["{{baseUrl}}"], "path": ["hospital-admin","users"], "query": [ { "key": "page", "value": "1" }, { "key": "limit", "value": "50" } ] }
+      }
+    },
+    {
+      "name": "Hospital Admin - List Jobs",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/hospital-admin/jobs?page=1&limit=50", "host": ["{{baseUrl}}"], "path": ["hospital-admin","jobs"], "query": [ { "key": "page", "value": "1" }, { "key": "limit", "value": "50" } ] }
+      }
+    },
+    {
+      "name": "Hospital Admin - List Units",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/hospital-admin/units", "host": ["{{baseUrl}}"], "path": ["hospital-admin","units"] }
+      }
+    },
+    {
+      "name": "Hospital Admin - Upload Logo",
+      "request": {
+        "method": "POST",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "body": { "mode": "formdata", "formdata": [ { "key": "logo", "type": "file", "src": ["/absolute/path/to/logo.png"] } ] },
+        "url": { "raw": "{{baseUrl}}/hospital-admin/logo", "host": ["{{baseUrl}}"], "path": ["hospital-admin","logo"] }
+      }
+    },
+    {
+      "name": "Hospital Admin - Get Themes",
+      "request": {
+        "method": "GET",
+        "header": [ { "key": "Authorization", "value": "Bearer {{token}}" } ],
+        "url": { "raw": "{{baseUrl}}/hospital-admin/themes", "host": ["{{baseUrl}}"], "path": ["hospital-admin","themes"] }
+      }
+    }
+  ]
+}
+
+
+
