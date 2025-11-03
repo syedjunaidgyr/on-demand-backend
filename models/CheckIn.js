@@ -79,6 +79,31 @@ const CheckIn = sequelize.define('CheckIn', {
     type: DataTypes.INTEGER,
     defaultValue: 0
   },
+  approvalStatus: {
+    type: DataTypes.ENUM('PENDING', 'APPROVED', 'REJECTED'),
+    allowNull: false,
+    defaultValue: 'PENDING',
+    field: 'approval_status'
+  },
+  approvedBy: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    field: 'approved_by',
+    references: {
+      model: 'users',
+      key: 'id'
+    }
+  },
+  approvedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'approved_at'
+  },
+  rejectionReason: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    field: 'rejection_reason'
+  },
   supervisorApproval: {
     type: DataTypes.BOOLEAN,
     defaultValue: false
