@@ -597,14 +597,27 @@ router.post('/jobs/:jobId/assign', authenticate, authorize('AGENCY'), validate(s
     const { mode, assignments, hourlyRate } = req.body;
 
     const job = await Job.findByPk(jobId);
-    if (!job || job.requiredRole !== 'NURSE') {
-      return res.status(404).json({ error: 'Job not found', message: 'Job not found or not a nurse job' });
+    if (!job || (job.requiredRole !== 'NURSE' && job.requiredRole !== 'AGENCY')) {
+      return res.status(404).json({ error: 'Job not found', message: 'Job not found or not a nurse/agency job' });
     }
 
     // Check agency is linked to hospital
     const link = await AgencyHospital.findOne({ where: { agencyId: req.user.id, hospitalId: job.hospitalId, status: 'APPROVED' } });
     if (!link) {
       return res.status(403).json({ error: 'Access denied', message: 'Agency not linked to this hospital' });
+    }
+
+    // For AGENCY jobs, check if the agency has already accepted the assignment
+    if (job.requiredRole === 'AGENCY') {
+      const agencyAssignment = await JobAssignment.findOne({
+        where: { jobId: job.id, userId: req.user.id, agencyId: req.user.id }
+      });
+      if (!agencyAssignment || agencyAssignment.status !== 'ACCEPTED') {
+        return res.status(403).json({ 
+          error: 'Assignment not accepted', 
+          message: 'You must first accept the AGENCY job assignment before assigning nurses' 
+        });
+      }
     }
 
     // Validate nurses are in pool
@@ -747,6 +760,92 @@ router.post('/jobs/:jobId/assign', authenticate, authorize('AGENCY'), validate(s
   } catch (error) {
     console.error('Agency assign job error:', error);
     return res.status(500).json({ error: 'Failed to assign job', message: error.message });
+  }
+});
+
+// Agency accepts an AGENCY job assignment
+router.post('/assignments/:assignmentId/accept', authenticate, authorize('AGENCY'), async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    
+    const assignment = await JobAssignment.findOne({
+      where: { id: assignmentId, userId: req.user.id, status: 'PENDING' },
+      include: [{ model: Job, as: 'job' }]
+    });
+    
+    if (!assignment) {
+      return res.status(404).json({ 
+        error: 'Assignment not found',
+        message: 'Assignment does not exist or is not pending' 
+      });
+    }
+    
+    // Verify this is an AGENCY job
+    if (assignment.job.requiredRole !== 'AGENCY') {
+      return res.status(400).json({ 
+        error: 'Invalid job type',
+        message: 'This assignment is not for an AGENCY job' 
+      });
+    }
+    
+    assignment.status = 'ACCEPTED';
+    assignment.acceptedAt = new Date();
+    await assignment.save();
+    
+    res.json({ 
+      message: 'Assignment accepted successfully', 
+      assignment 
+    });
+  } catch (error) {
+    console.error('Accept assignment error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to accept assignment', 
+      message: error.message 
+    });
+  }
+});
+
+// Agency rejects an AGENCY job assignment
+router.post('/assignments/:assignmentId/reject', authenticate, authorize('AGENCY'), async (req, res) => {
+  try {
+    const { assignmentId } = req.params;
+    const { reason } = req.body;
+    
+    const assignment = await JobAssignment.findOne({
+      where: { id: assignmentId, userId: req.user.id, status: 'PENDING' },
+      include: [{ model: Job, as: 'job' }]
+    });
+    
+    if (!assignment) {
+      return res.status(404).json({ 
+        error: 'Assignment not found',
+        message: 'Assignment does not exist or is not pending' 
+      });
+    }
+    
+    // Verify this is an AGENCY job
+    if (assignment.job.requiredRole !== 'AGENCY') {
+      return res.status(400).json({ 
+        error: 'Invalid job type',
+        message: 'This assignment is not for an AGENCY job' 
+      });
+    }
+    
+    assignment.status = 'REJECTED';
+    assignment.rejectedAt = new Date();
+    assignment.rejectionReason = reason;
+    await assignment.save();
+    
+    res.json({ 
+      message: 'Assignment rejected successfully', 
+      assignment 
+    });
+  } catch (error) {
+    console.error('Reject assignment error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to reject assignment', 
+      message: error.message 
+    });
   }
 });
 

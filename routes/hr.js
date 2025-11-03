@@ -1,6 +1,6 @@
 const express = require('express');
 const { Op } = require('sequelize');
-const { User, Job, JobAssignment, CheckIn, Hospital, Unit } = require('../models');
+const { User, Job, JobAssignment, CheckIn, Hospital, Unit, AgencyHospital } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas, validateDepartmentSpecialization } = require('../middleware/validation');
 const { findCompatibleStaff } = require('../utils/helpers');
@@ -354,52 +354,84 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
     } catch (e) {}
 
     // Find compatible staff for this job
-    const whereClause = {
-      role: job.requiredRole,
-      department: job.department,
-      isActive: true
-    };
+    let compatibleStaff = [];
     
-    // For doctors, also match specialization
-    if (job.requiredRole === 'DOCTOR' && job.specialization) {
-      whereClause.specialization = job.specialization;
+    if (job.requiredRole === 'AGENCY') {
+      // For AGENCY jobs, find all agencies linked to this hospital
+      const agencyLinks = await AgencyHospital.findAll({
+        where: { hospitalId: job.hospitalId, status: 'APPROVED' },
+        include: [
+          { model: User, as: 'agency', where: { isActive: true }, attributes: ['id', 'firstName', 'lastName', 'email', 'department', 'specialization'] }
+        ]
+      });
+      compatibleStaff = agencyLinks.map(link => link.agency);
+      console.log('🔍 DEBUG: Job created (AGENCY):', {
+        jobId: job.id,
+        requiredRole: job.requiredRole,
+        department: job.department,
+        hospitalId: job.hospitalId,
+        compatibleStaffCount: compatibleStaff.length,
+        compatibleStaff: compatibleStaff.map(s => ({
+          id: s.id,
+          name: `${s.firstName} ${s.lastName}`,
+          role: 'AGENCY'
+        }))
+      });
+    } else {
+      // For DOCTOR/NURSE jobs, find matching staff
+      const whereClause = {
+        role: job.requiredRole,
+        department: job.department,
+        isActive: true
+      };
+      
+      // For doctors, also match specialization
+      if (job.requiredRole === 'DOCTOR' && job.specialization) {
+        whereClause.specialization = job.specialization;
+      }
+      
+      compatibleStaff = await User.findAll({
+        where: whereClause,
+        attributes: ['id', 'firstName', 'lastName', 'email', 'department', 'specialization']
+      });
+
+      console.log('🔍 DEBUG: Job created:', {
+        jobId: job.id,
+        requiredRole: job.requiredRole,
+        department: job.department,
+        specialization: job.specialization,
+        whereClause: whereClause,
+        compatibleStaffCount: compatibleStaff.length,
+        compatibleStaff: compatibleStaff.map(s => ({
+          id: s.id,
+          name: `${s.firstName} ${s.lastName}`,
+          role: s.role,
+          department: s.department,
+          specialization: s.specialization
+        }))
+      });
     }
-    
-    const compatibleStaff = await User.findAll({
-      where: whereClause,
-      attributes: ['id', 'firstName', 'lastName', 'email', 'department', 'specialization']
-    });
 
-    console.log('🔍 DEBUG: Job created:', {
-      jobId: job.id,
-      requiredRole: job.requiredRole,
-      department: job.department,
-      specialization: job.specialization,
-      whereClause: whereClause,
-      compatibleStaffCount: compatibleStaff.length,
-      compatibleStaff: compatibleStaff.map(s => ({
-        id: s.id,
-        name: `${s.firstName} ${s.lastName}`,
-        role: s.role,
-        department: s.department,
-        specialization: s.specialization
-      }))
-    });
-
-    // Auto-create assignments for all compatible staff
+    // Auto-create assignments for all compatible staff/agencies
     const assignments = [];
     if (compatibleStaff.length > 0) {
-      const assignmentPromises = compatibleStaff.map(staff => 
-        JobAssignment.create({
+      const assignmentPromises = compatibleStaff.map(staff => {
+        const assignmentData = {
           jobId: job.id,
           userId: staff.id,
           assignedBy: req.userId,
-          createdAt: new Date(),
           hourlyRate: job.hourlyRate,
           status: 'PENDING',
           isAutoAssigned: true
-        })
-      );
+        };
+        
+        // For AGENCY jobs, set agencyId to the agency's userId
+        if (job.requiredRole === 'AGENCY') {
+          assignmentData.agencyId = staff.id;
+        }
+        
+        return JobAssignment.create(assignmentData);
+      });
       
       const createdAssignments = await Promise.all(assignmentPromises);
       assignments.push(...createdAssignments);
@@ -408,7 +440,7 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
       try {
         const notifications = compatibleStaff.map(staff => ({
           userId: String(staff.id),
-          userType: (staff.role || (job.requiredRole || '')).toLowerCase(),
+          userType: job.requiredRole === 'AGENCY' ? 'agency' : (staff.role || (job.requiredRole || '')).toLowerCase(),
           placeholders: { jobTitle: job.title, department: job.department, location: job.location, startDate: formatHuman(job.startDate) }
         }));
         if (job.requiredRole === 'DOCTOR') {
@@ -416,6 +448,7 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
         } else if (job.requiredRole === 'NURSE') {
           await sendNotifications('JobCreated_Nurse', notifications);
         }
+        // Note: Agency notification template may need to be added
       } catch (e) {}
       
       console.log('✅ DEBUG: Assignments created:', {
@@ -425,6 +458,7 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
           id: a.id,
           jobId: a.jobId,
           userId: a.userId,
+          agencyId: a.agencyId,
           status: a.status
         }))
       });
@@ -822,20 +856,23 @@ router.post('/jobs/:id/assign', validate(schemas.jobAssignment), async (req, res
       });
     }
 
-    // Check department compatibility
-    if (user.department !== job.department) {
-      return res.status(400).json({
-        error: 'Department mismatch',
-        message: `User department (${user.department}) does not match job department (${job.department})`
-      });
-    }
+    // Skip compatibility checks for AGENCY jobs (agencies don't have departments/specializations)
+    if (job.requiredRole !== 'AGENCY') {
+      // Check department compatibility
+      if (user.department !== job.department) {
+        return res.status(400).json({
+          error: 'Department mismatch',
+          message: `User department (${user.department}) does not match job department (${job.department})`
+        });
+      }
 
-    // Check specialization compatibility (only for doctors)
-    if (job.requiredRole === 'DOCTOR' && user.specialization !== job.specialization) {
-      return res.status(400).json({
-        error: 'Specialization mismatch',
-        message: `User specialization (${user.specialization}) does not match job specialization (${job.specialization})`
-      });
+      // Check specialization compatibility (only for doctors)
+      if (job.requiredRole === 'DOCTOR' && user.specialization !== job.specialization) {
+        return res.status(400).json({
+          error: 'Specialization mismatch',
+          message: `User specialization (${user.specialization}) does not match job specialization (${job.specialization})`
+        });
+      }
     }
 
     // Check if user is active
@@ -871,7 +908,7 @@ router.post('/jobs/:id/assign', validate(schemas.jobAssignment), async (req, res
     }
 
     // Create assignment
-    const assignment = await JobAssignment.create({
+    const assignmentData = {
       jobId,
       userId,
       assignedBy: req.userId,
@@ -879,7 +916,14 @@ router.post('/jobs/:id/assign', validate(schemas.jobAssignment), async (req, res
       hourlyRate: hourlyRate || job.hourlyRate,
       notes,
       isDirectAssignment: true
-    });
+    };
+    
+    // For AGENCY jobs, set agencyId to the agency's userId
+    if (job.requiredRole === 'AGENCY') {
+      assignmentData.agencyId = userId;
+    }
+    
+    const assignment = await JobAssignment.create(assignmentData);
 
     // Job status remains ACTIVE until doctor starts working
     // The assignment status (PENDING, ACCEPTED, etc.) is tracked separately
