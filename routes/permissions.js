@@ -18,7 +18,7 @@ const { sendNotifications } = require('../utils/notifications');
 // @route   GET /api/v1/permissions
 // @desc    Get all permissions (Admin only)
 // @access  Private (ADMIN)
-router.get('/', authenticate, authorize('ADMIN'), async (req, res) => {
+router.get('/', authenticate, authorize('ADMIN', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { page = 1, limit = 50, category, resource, action, scope } = req.query;
     const offset = (page - 1) * limit;
@@ -99,7 +99,7 @@ router.post('/', authenticate, authorize('ADMIN'), async (req, res) => {
 // @route   GET /api/v1/permissions/masters
 // @desc    Get all permission masters (Admin only)
 // @access  Private (ADMIN)
-router.get('/masters', authenticate, authorize('ADMIN'), async (req, res) => {
+router.get('/masters', authenticate, authorize('ADMIN', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { page = 1, limit = 20, role } = req.query;
     const offset = (page - 1) * limit;
@@ -186,10 +186,10 @@ router.post('/masters', authenticate, authorize('ADMIN'), async (req, res) => {
 // @route   GET /api/v1/permissions/users/:userId
 // @desc    Get permissions for a specific user
 // @access  Private (ADMIN, HR)
-router.get('/users/:userId', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+router.get('/users/:userId', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { userId } = req.params;
-    const { hospitalId, unitCode } = req.query;
+    let { hospitalId, unitCode } = req.query;
 
     const user = await User.findByPk(userId, {
       attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'hospitalId', 'unitCode']
@@ -199,7 +199,15 @@ router.get('/users/:userId', authenticate, authorize('ADMIN', 'HR'), async (req,
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const permissions = await getUserPermissions(userId, hospitalId, unitCode);
+    // Scope enforcement for Hospital Admins: auto-scope to their hospital, block cross-hospital visibility
+    if (req.user.role === 'HOSPITAL_ADMIN') {
+      hospitalId = hospitalId || req.user.hospitalId;
+      if (parseInt(hospitalId) !== req.user.hospitalId) {
+        return res.status(403).json({ error: 'Access denied', message: 'Cannot view other hospital permissions' });
+      }
+    }
+
+    const permissions = await getUserPermissions(userId, hospitalId || null, unitCode || null);
 
     // Get permission masters for the user's role
     const roleMasters = await PermissionMaster.findAll({
@@ -221,7 +229,7 @@ router.get('/users/:userId', authenticate, authorize('ADMIN', 'HR'), async (req,
 // @route   POST /api/v1/permissions/users/:userId/grant
 // @desc    Grant permission to a user
 // @access  Private (ADMIN, HR)
-router.post('/users/:userId/grant', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+router.post('/users/:userId/grant', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { userId } = req.params;
     const { permissionCode, hospitalId, unitCode, expiresAt, notes } = req.body;
@@ -229,6 +237,14 @@ router.post('/users/:userId/grant', authenticate, authorize('ADMIN', 'HR'), asyn
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Scope enforcement for Hospital Admins: must specify their own hospitalId; global grants are not allowed
+    if (req.user.role === 'HOSPITAL_ADMIN') {
+      const hid = parseInt(hospitalId);
+      if (!hid || hid !== req.user.hospitalId) {
+        return res.status(403).json({ error: 'Access denied', message: 'Hospital Admin grants must target their own hospitalId' });
+      }
     }
 
     const permissionRecord = await grantPermission(userId, permissionCode, req.userId, {
@@ -264,7 +280,7 @@ router.post('/users/:userId/grant', authenticate, authorize('ADMIN', 'HR'), asyn
 // @route   POST /api/v1/permissions/users/:userId/revoke
 // @desc    Revoke permission from a user
 // @access  Private (ADMIN, HR)
-router.post('/users/:userId/revoke', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+router.post('/users/:userId/revoke', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { userId } = req.params;
     const { permissionCode, hospitalId, unitCode } = req.body;
@@ -274,10 +290,15 @@ router.post('/users/:userId/revoke', authenticate, authorize('ADMIN', 'HR'), asy
       return res.status(404).json({ error: 'User not found' });
     }
 
-    await revokePermission(userId, permissionCode, {
-      hospitalId,
-      unitCode
-    });
+    // Scope enforcement for Hospital Admins: can only revoke within their hospital
+    if (req.user.role === 'HOSPITAL_ADMIN') {
+      const hid = parseInt(hospitalId);
+      if (!hid || hid !== req.user.hospitalId) {
+        return res.status(403).json({ error: 'Access denied', message: 'Hospital Admin revokes must target their own hospitalId' });
+      }
+    }
+
+    await revokePermission(userId, permissionCode, { hospitalId, unitCode });
 
     // Notify target user
     try {
@@ -306,7 +327,7 @@ router.post('/users/:userId/revoke', authenticate, authorize('ADMIN', 'HR'), asy
 // @route   POST /api/v1/permissions/users/:userId/apply-master
 // @desc    Apply a permission master to a user
 // @access  Private (ADMIN, HR)
-router.post('/users/:userId/apply-master', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+router.post('/users/:userId/apply-master', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { userId } = req.params;
     const { masterId, hospitalId, unitCode } = req.body;
@@ -319,6 +340,14 @@ router.post('/users/:userId/apply-master', authenticate, authorize('ADMIN', 'HR'
     const master = await PermissionMaster.findByPk(masterId);
     if (!master) {
       return res.status(404).json({ error: 'Permission master not found' });
+    }
+
+    // Scope enforcement for Hospital Admins: require hospitalId to be their own
+    if (req.user.role === 'HOSPITAL_ADMIN') {
+      const hid = parseInt(hospitalId);
+      if (!hid || hid !== req.user.hospitalId) {
+        return res.status(403).json({ error: 'Access denied', message: 'Hospital Admin can only apply masters within their hospitalId' });
+      }
     }
 
     const grantedPermissions = [];
@@ -403,7 +432,7 @@ router.post('/users/:userId/apply-master', authenticate, authorize('ADMIN', 'HR'
 // @route   GET /api/v1/permissions/hospitals/:hospitalId
 // @desc    Get all permissions for a specific hospital
 // @access  Private (ADMIN, HR)
-router.get('/hospitals/:hospitalId', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+router.get('/hospitals/:hospitalId', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { hospitalId } = req.params;
     const { page = 1, limit = 50 } = req.query;
@@ -412,6 +441,11 @@ router.get('/hospitals/:hospitalId', authenticate, authorize('ADMIN', 'HR'), asy
     const hospital = await Hospital.findByPk(hospitalId);
     if (!hospital) {
       return res.status(404).json({ error: 'Hospital not found' });
+    }
+
+    // Scope enforcement for Hospital Admins
+    if (req.user.role === 'HOSPITAL_ADMIN' && req.user.hospitalId !== parseInt(hospitalId)) {
+      return res.status(403).json({ error: 'Access denied', message: 'Cannot view other hospital permissions' });
     }
 
     const { count, rows: permissions } = await HospitalPermission.findAndCountAll({

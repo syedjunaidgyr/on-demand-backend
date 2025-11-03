@@ -46,10 +46,15 @@ router.get('/list', authenticate, authorize('ADMIN', 'HR'), async (req, res) => 
 });
 
 // Get agencies by hospital (default APPROVED)
-router.get('/hospitals/:hospitalId/agencies', authenticate, authorize('ADMIN', 'HR', 'AGENCY'), async (req, res) => {
+router.get('/hospitals/:hospitalId/agencies', authenticate, authorize('ADMIN', 'HR', 'AGENCY', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { hospitalId } = req.params;
     const { status = 'APPROVED' } = req.query;
+
+    // Scope enforcement for Hospital Admins: can only view their own hospital
+    if (req.user.role === 'HOSPITAL_ADMIN' && req.user.hospitalId !== parseInt(hospitalId)) {
+      return res.status(403).json({ error: 'Access denied', message: 'Cannot view other hospital' });
+    }
 
     const links = await AgencyHospital.findAll({
       where: { hospitalId, ...(status ? { status } : {}) },
@@ -139,11 +144,16 @@ router.get('/admin/dashboard', authenticate, authorize('ADMIN', 'HR'), async (re
   }
 });
 
-// Blacklist agency for a hospital (ADMIN/HR)
-router.post('/:agencyId/hospitals/:hospitalId/blacklist', authenticate, authorize('ADMIN', 'HR'), validate(schemas.agencyBlacklist), async (req, res) => {
+// Blacklist agency for a hospital (ADMIN/HR/HOSPITAL_ADMIN)
+router.post('/:agencyId/hospitals/:hospitalId/blacklist', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), validate(schemas.agencyBlacklist), async (req, res) => {
   try {
     const { agencyId, hospitalId } = req.params;
     const { reasonCategory, reasonDetails } = req.body;
+
+    // Scope enforcement for Hospital Admins: can only act on their own hospital
+    if (req.user.role === 'HOSPITAL_ADMIN' && req.user.hospitalId !== parseInt(hospitalId)) {
+      return res.status(403).json({ error: 'Access denied', message: 'Cannot modify other hospital' });
+    }
 
     const link = await AgencyHospital.findOne({ where: { agencyId, hospitalId } });
     if (!link) {
@@ -160,10 +170,14 @@ router.post('/:agencyId/hospitals/:hospitalId/blacklist', authenticate, authoriz
   }
 });
 
-// Restore agency for a hospital (ADMIN/HR)
-router.post('/:agencyId/hospitals/:hospitalId/restore', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+// Restore agency for a hospital (ADMIN/HR/HOSPITAL_ADMIN)
+router.post('/:agencyId/hospitals/:hospitalId/restore', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { agencyId, hospitalId } = req.params;
+    // Scope enforcement for Hospital Admins: can only act on their own hospital
+    if (req.user.role === 'HOSPITAL_ADMIN' && req.user.hospitalId !== parseInt(hospitalId)) {
+      return res.status(403).json({ error: 'Access denied', message: 'Cannot modify other hospital' });
+    }
     const link = await AgencyHospital.findOne({ where: { agencyId, hospitalId } });
     if (!link) {
       return res.status(404).json({ error: 'Not found', message: 'Agency-hospital link not found' });
@@ -176,10 +190,14 @@ router.post('/:agencyId/hospitals/:hospitalId/restore', authenticate, authorize(
   }
 });
 
-// Get blacklisted agencies for a hospital (ADMIN/HR)
-router.get('/hospitals/:hospitalId/blacklisted', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+// Get blacklisted agencies for a hospital (ADMIN/HR/HOSPITAL_ADMIN)
+router.get('/hospitals/:hospitalId/blacklisted', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { hospitalId } = req.params;
+    // Scope enforcement for Hospital Admins: can only view their own hospital
+    if (req.user.role === 'HOSPITAL_ADMIN' && req.user.hospitalId !== parseInt(hospitalId)) {
+      return res.status(403).json({ error: 'Access denied', message: 'Cannot view other hospital' });
+    }
     const { q, from, to } = req.query;
     const where = { hospitalId, status: 'REVOKED' };
     if (q) where.blacklistReason = { [Op.like]: `%${q}%` };
