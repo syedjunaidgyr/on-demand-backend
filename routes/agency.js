@@ -1,6 +1,6 @@
 const express = require('express');
 const { Op } = require('sequelize');
-const { User, Hospital, Job, JobAssignment, AgencyHospital, AgencyNurse, AssignmentSegment } = require('../models');
+const { User, Hospital, Job, JobAssignment, AgencyHospital, AgencyNurse, AssignmentSegment, CheckIn } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 
@@ -722,6 +722,7 @@ router.post('/jobs/:jobId/assign', authenticate, authorize('AGENCY'), validate(s
         jobId: job.id,
         userId: nurseId,
         agencyId: req.user.id,
+        assignedBy: req.user.id,
         status: 'ASSIGNED',
         hourlyRate: hourlyRate || job.hourlyRate
       });
@@ -733,6 +734,7 @@ router.post('/jobs/:jobId/assign', authenticate, authorize('AGENCY'), validate(s
           jobId: job.id,
           userId: seg.userId,
           agencyId: req.user.id,
+          assignedBy: req.user.id,
           status: 'ASSIGNED',
           hourlyRate: hourlyRate || job.hourlyRate
         });
@@ -845,6 +847,56 @@ router.post('/assignments/:assignmentId/reject', authenticate, authorize('AGENCY
     return res.status(500).json({ 
       error: 'Failed to reject assignment', 
       message: error.message 
+    });
+  }
+});
+
+// Get job assignments for a specific job (agency view)
+router.get('/jobs/:jobId/assignments', authenticate, authorize('AGENCY', 'ADMIN', 'HR'), async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    
+    const job = await Job.findByPk(jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found', message: 'Job does not exist' });
+    }
+    
+    // Check agency is linked to hospital (skip for ADMIN/HR)
+    if (req.user.role === 'AGENCY') {
+      const link = await AgencyHospital.findOne({ where: { agencyId: req.user.id, hospitalId: job.hospitalId, status: 'APPROVED' } });
+      if (!link) {
+        return res.status(403).json({ error: 'Access denied', message: 'Agency not linked to this hospital' });
+      }
+    }
+    
+    const assignments = await JobAssignment.findAll({
+      where: { jobId: jobId },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'role']
+        },
+        {
+          model: User,
+          as: 'assigner',
+          attributes: ['id', 'firstName', 'lastName', 'email']
+        },
+        {
+          model: CheckIn,
+          as: 'checkIns',
+          order: [['checkInTime', 'DESC']]
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+    
+    res.json({ assignments });
+  } catch (error) {
+    console.error('Get job assignments error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch assignments',
+      message: error.message
     });
   }
 });

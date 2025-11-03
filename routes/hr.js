@@ -1120,6 +1120,7 @@ router.get('/dashboard', async (req, res) => {
     // Staff statistics
     const totalDoctors = await User.count({ where: { role: 'DOCTOR', isActive: true } });
     const totalNurses = await User.count({ where: { role: 'NURSE', isActive: true } });
+    const totalAgencies = await User.count({ where: { role: 'AGENCY', isActive: true } });
     const totalStaff = totalDoctors + totalNurses;
 
     // Monthly statistics
@@ -1138,6 +1139,10 @@ router.get('/dashboard', async (req, res) => {
         }
       }
     });
+
+    // Agency-related statistics (added without affecting existing fields)
+    const agencyJobs = await Job.count({ where: { requiredRole: 'AGENCY' } });
+    const agencyAssignments = await JobAssignment.count({ where: { agencyId: { [Op.ne]: null } } });
 
     // Recent activities
     const recentJobs = await Job.findAll({
@@ -1169,6 +1174,19 @@ router.get('/dashboard', async (req, res) => {
       ]
     });
 
+    // Recent agency assignments (agency -> nurse assignments)
+    const recentAgencyAssignments = await JobAssignment.findAll({
+      limit: 5,
+      order: [['createdAt', 'DESC']],
+      where: { agencyId: { [Op.ne]: null } },
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'email', 'phone', 'role'] },
+        { model: User, as: 'assigner', attributes: ['id', 'firstName', 'lastName', 'email'] },
+        { model: User, as: 'agency', attributes: ['id', 'firstName', 'lastName', 'email', 'role'] },
+        { model: Job, as: 'job', attributes: ['id', 'title', 'department', 'location'] }
+      ]
+    });
+
     const dashboard = {
       jobs: {
         total: totalJobs,
@@ -1191,13 +1209,19 @@ router.get('/dashboard', async (req, res) => {
         doctors: totalDoctors,
         nurses: totalNurses
       },
+      agencies: {
+        total: totalAgencies,
+        jobs: agencyJobs,
+        assignments: agencyAssignments
+      },
       monthly: {
         jobs: monthlyJobs,
         assignments: monthlyAssignments
       },
       recent: {
         jobs: recentJobs,
-        assignments: recentAssignments
+        assignments: recentAssignments,
+        agencyAssignments: recentAgencyAssignments
       }
     };
 
