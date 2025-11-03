@@ -455,6 +455,11 @@ router.post('/hospitals/:id/themes', async (req, res) => {
     
     const themeData = req.body;
     
+    // Generate ID if not provided (do this BEFORE validation)
+    if (!themeData.id) {
+      themeData.id = generateUniqueThemeId(hospital.themes || []);
+    }
+
     // Validate the theme
     const validation = validateTheme(themeData);
     if (!validation.valid) {
@@ -462,11 +467,6 @@ router.post('/hospitals/:id/themes', async (req, res) => {
         error: 'Invalid theme data',
         message: validation.error
       });
-    }
-    
-    // Generate ID if not provided
-    if (!themeData.id) {
-      themeData.id = generateUniqueThemeId(hospital.themes || []);
     }
     
     // Check if theme ID already exists
