@@ -1,6 +1,7 @@
 const express = require('express');
 const { Op } = require('sequelize');
 const { User, Hospital, Job, JobAssignment, AgencyHospital, AgencyNurse, AssignmentSegment, CheckIn } = require('../models');
+const { sendNotifications, formatHuman } = require('../utils/notifications');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 
@@ -898,6 +899,115 @@ router.get('/jobs/:jobId/assignments', authenticate, authorize('AGENCY', 'ADMIN'
       error: 'Failed to fetch assignments',
       message: error.message
     });
+  }
+});
+
+// Agency selects a final candidate from accepted assignments (agency-scoped)
+router.post('/jobs/:jobId/select-candidate', authenticate, authorize('AGENCY', 'ADMIN', 'HR'), async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { assignmentId } = req.body || {};
+
+    if (!assignmentId) {
+      return res.status(400).json({ error: 'assignmentId required', message: 'Please provide assignmentId' });
+    }
+
+    const job = await Job.findByPk(jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found', message: 'Job does not exist' });
+    }
+
+    // For agencies, ensure link to hospital
+    if (req.user.role === 'AGENCY') {
+      const link = await AgencyHospital.findOne({ where: { agencyId: req.user.id, hospitalId: job.hospitalId, status: 'APPROVED' } });
+      if (!link) {
+        return res.status(403).json({ error: 'Access denied', message: 'Agency not linked to this hospital' });
+      }
+    }
+
+    // Load the selected assignment; restrict to this agency when applicable
+    const selectedAssignment = await JobAssignment.findOne({
+      where: {
+        id: assignmentId,
+        jobId: jobId,
+        status: 'ACCEPTED',
+        ...(req.user.role === 'AGENCY' ? { agencyId: req.user.id } : {})
+      },
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'email', 'role'] },
+        { model: Job, as: 'job', attributes: ['id', 'title', 'maxAssignments', 'startDate', 'location'] }
+      ]
+    });
+
+    if (!selectedAssignment) {
+      return res.status(404).json({ error: 'Assignment not found', message: 'Assignment does not exist or is not accepted' });
+    }
+
+    // Ensure job still has capacity
+    const currentAcceptedAssignments = await JobAssignment.count({ where: { jobId: jobId, status: 'ACCEPTED' } });
+    if (currentAcceptedAssignments > selectedAssignment.job.maxAssignments) {
+      return res.status(400).json({ error: 'Job is full', message: 'This job has already reached its maximum number of assignments' });
+    }
+
+    // Confirm selected assignment
+    await selectedAssignment.update({ status: 'ASSIGNED', confirmedAt: new Date() });
+
+    // Reject other accepted assignments for this job (scope to agency when applicable)
+    await JobAssignment.update(
+      {
+        status: 'REJECTED',
+        rejectedAt: new Date(),
+        rejectionReason: 'Another candidate was selected for this job'
+      },
+      {
+        where: {
+          jobId: jobId,
+          status: 'ACCEPTED',
+          id: { [Op.ne]: assignmentId },
+          ...(req.user.role === 'AGENCY' ? { agencyId: req.user.id } : {})
+        }
+      }
+    );
+
+    // Update job status to ASSIGNED (noop if already set)
+    if (job.status !== 'ASSIGNED') {
+      job.status = 'ASSIGNED';
+      await job.save({ validate: false });
+    }
+
+    // Notifications
+    try {
+      await sendNotifications('CandidateSelected_NotifyStaff', [{
+        userId: String(selectedAssignment.user.id),
+        userType: (selectedAssignment.user.role || '').toLowerCase(),
+        placeholders: {
+          jobTitle: selectedAssignment.job.title,
+          startDate: formatHuman(selectedAssignment.job.startDate),
+          location: selectedAssignment.job.location
+        }
+      }]);
+    } catch (e) {}
+
+    try {
+      // Confirm to the selector (agency/admin/hr)
+      await sendNotifications('CandidateSelected_ConfirmHR', [{
+        userId: String(req.user.id),
+        userType: (req.user.role || 'hr').toLowerCase(),
+        placeholders: {
+          assigneeName: `${selectedAssignment.user.firstName} ${selectedAssignment.user.lastName}`,
+          jobTitle: selectedAssignment.job.title
+        }
+      }]);
+    } catch (e) {}
+
+    res.json({
+      message: 'Candidate assigned successfully by agency',
+      selectedAssignment,
+      jobStatus: job.status
+    });
+  } catch (error) {
+    console.error('Agency select candidate error:', error);
+    return res.status(500).json({ error: 'Failed to select candidate', message: error.message });
   }
 });
 
