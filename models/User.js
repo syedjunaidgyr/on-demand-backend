@@ -207,7 +207,7 @@ User.prototype.getEffectiveTheme = async function() {
   const { QueryTypes } = require('sequelize');
   
   const [hospitalData] = await sequelize.query(`
-    SELECT themes, defaultThemeId 
+    SELECT themes, default_theme_id as defaultThemeId 
     FROM hospitals 
     WHERE id = :hospitalId
   `, {

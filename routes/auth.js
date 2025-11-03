@@ -84,8 +84,8 @@ router.post('/login', validate(schemas.userLogin), async (req, res) => {
     }
 
     // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    await user.update({ lastLogin: new Date() });
+    await user.reload();
 
     // Generate token with theme data
     const token = await generateToken(user.id, user.role);

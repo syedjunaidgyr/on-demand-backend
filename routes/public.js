@@ -7,6 +7,7 @@ const router = express.Router();
 router.get('/hospitals', async (req, res) => {
   try {
     const hospitals = await Hospital.findAll({
+      where: { isActive: true },
       attributes: ['id', 'name', 'code', 'isActive', 'logo']
     });
     res.json({ hospitals });

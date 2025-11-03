@@ -82,7 +82,7 @@ router.get('/search', optionalAuth, validate(schemas.pagination, 'query'), async
         {
           model: JobAssignment,
           as: 'assignments',
-          attributes: ['id', 'status', 'assignedAt'],
+          attributes: ['id', 'status', [Job.sequelize.literal('`assignments`.`created_at`'), 'assignedAt']],
           include: [
             {
               model: User,
@@ -141,7 +141,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
         {
           model: JobAssignment,
           as: 'assignments',
-          attributes: ['id', 'status', 'assignedAt'],
+          attributes: ['id', 'status', [Job.sequelize.literal('`assignments`.`created_at`'), 'assignedAt']],
           include: [
             {
               model: User,
