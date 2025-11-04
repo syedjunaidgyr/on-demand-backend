@@ -14,6 +14,7 @@ const PermissionMaster = require('./PermissionMaster');
 const AgencyHospital = require('./AgencyHospital');
 const AgencyNurse = require('./AgencyNurse');
 const AssignmentSegment = require('./AssignmentSegment');
+const AssignmentActivity = require('./AssignmentActivity');
 
 // Define associations
 // Hospital associations
@@ -62,6 +63,13 @@ CheckIn.belongsTo(JobAssignment, { foreignKey: 'jobAssignmentId', as: 'jobAssign
 // Assignment segments
 JobAssignment.hasMany(AssignmentSegment, { foreignKey: 'jobAssignmentId', as: 'segments' });
 AssignmentSegment.belongsTo(JobAssignment, { foreignKey: 'jobAssignmentId', as: 'jobAssignment' });
+
+// Assignment activities
+JobAssignment.hasMany(AssignmentActivity, { foreignKey: 'jobAssignmentId', as: 'activities' });
+AssignmentActivity.belongsTo(JobAssignment, { foreignKey: 'jobAssignmentId', as: 'jobAssignment' });
+
+User.hasMany(AssignmentActivity, { foreignKey: 'userId', as: 'activities' });
+AssignmentActivity.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 User.hasMany(CheckIn, { foreignKey: 'userId', as: 'checkIns' });
 CheckIn.belongsTo(User, { foreignKey: 'userId', as: 'user' });
@@ -170,5 +178,6 @@ module.exports = {
   AgencyHospital,
   AgencyNurse,
   AssignmentSegment,
+  AssignmentActivity,
   syncDatabase
 };

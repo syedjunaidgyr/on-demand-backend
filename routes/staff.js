@@ -1,6 +1,6 @@
 const express = require('express');
 const { Op } = require('sequelize');
-const { User, Job, JobAssignment, CheckIn, Hospital } = require('../models');
+const { User, Job, JobAssignment, CheckIn, Hospital, AssignmentActivity } = require('../models');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 const { sendNotifications, formatHuman } = require('../utils/notifications');
@@ -1076,6 +1076,129 @@ router.post('/assignments/:id/request-extension', validate(schemas.extensionRequ
     console.error('Request extension error:', error);
     res.status(500).json({
       error: 'Failed to request extension',
+      message: error.message
+    });
+  }
+});
+
+// Create activity entry for an assignment
+router.post('/assignments/:assignmentId/activities', validate(schemas.assignmentActivity), async (req, res) => {
+  try {
+    const assignmentId = req.params.assignmentId;
+    const { activityTime, description } = req.body;
+
+    // Verify assignment exists and is accessible by user
+    // For DOCTOR/NURSE: must be the assigned user (userId)
+    // For AGENCY: must be the agency that assigned the nurse (agencyId)
+    const whereClause = {
+      id: assignmentId,
+      status: { [Op.in]: ['IN_PROGRESS', 'COMPLETED'] }
+    };
+
+    if (req.user.role === 'AGENCY') {
+      whereClause.agencyId = req.userId;
+    } else {
+      whereClause.userId = req.userId;
+    }
+
+    const assignment = await JobAssignment.findOne({ where: whereClause });
+
+    if (!assignment) {
+      return res.status(404).json({
+        error: 'Assignment not found',
+        message: 'Assignment does not exist or is not accessible'
+      });
+    }
+
+    // For activities, use the actual worker's userId (not agency's userId)
+    // If agency is creating, use assignment.userId (the nurse)
+    const activityUserId = req.user.role === 'AGENCY' ? assignment.userId : req.userId;
+
+    // Create activity entry
+    const activity = await AssignmentActivity.create({
+      jobAssignmentId: assignmentId,
+      userId: activityUserId,
+      activityTime: activityTime || new Date(),
+      description: description
+    });
+
+    res.status(201).json({
+      message: 'Activity logged successfully',
+      activity: {
+        id: activity.id,
+        jobAssignmentId: activity.jobAssignmentId,
+        userId: activity.userId,
+        activityTime: activity.activityTime,
+        description: activity.description,
+        createdAt: activity.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Create activity error:', error);
+    res.status(500).json({
+      error: 'Failed to log activity',
+      message: error.message
+    });
+  }
+});
+
+// List activities for an assignment
+router.get('/assignments/:assignmentId/activities', async (req, res) => {
+  try {
+    const assignmentId = req.params.assignmentId;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const sort = req.query.sort === 'asc' ? 'ASC' : 'DESC';
+    const offset = (page - 1) * limit;
+
+    // Verify assignment exists and is accessible by user
+    // For DOCTOR/NURSE: must be the assigned user (userId)
+    // For AGENCY: must be the agency that assigned the nurse (agencyId)
+    const whereClause = { id: assignmentId };
+
+    if (req.user.role === 'AGENCY') {
+      whereClause.agencyId = req.userId;
+    } else {
+      whereClause.userId = req.userId;
+    }
+
+    const assignment = await JobAssignment.findOne({ where: whereClause });
+
+    if (!assignment) {
+      return res.status(404).json({
+        error: 'Assignment not found',
+        message: 'Assignment does not exist or is not accessible'
+      });
+    }
+
+    // Get activities with pagination
+    const { count, rows: activities } = await AssignmentActivity.findAndCountAll({
+      where: {
+        jobAssignmentId: assignmentId
+      },
+      order: [['activityTime', sort]],
+      limit: limit,
+      offset: offset
+    });
+
+    res.json({
+      activities: activities.map(activity => ({
+        id: activity.id,
+        activityTime: activity.activityTime,
+        description: activity.description,
+        createdAt: activity.createdAt
+      })),
+      pagination: {
+        page: page,
+        limit: limit,
+        total: count,
+        totalPages: Math.ceil(count / limit)
+      }
+    });
+  } catch (error) {
+    console.error('List activities error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch activities',
       message: error.message
     });
   }

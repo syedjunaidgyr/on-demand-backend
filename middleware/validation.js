@@ -390,6 +390,12 @@ const schemas = {
       address: Joi.string().optional()
     }).optional(),
     notes: Joi.string().max(500).optional()
+  }),
+
+  // Assignment activity schema
+  assignmentActivity: Joi.object({
+    activityTime: Joi.date().optional(),
+    description: Joi.string().max(5000).required()
   })
 };
 
