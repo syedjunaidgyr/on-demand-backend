@@ -344,16 +344,23 @@ const schemas = {
   // Hospital update schema
   hospitalUpdate: Joi.object({
     name: Joi.string().min(2).max(255).optional(),
-    code: Joi.string().min(2).max(50).optional(),
-    address: Joi.string().max(500).optional(),
-    city: Joi.string().max(100).optional(),
-    state: Joi.string().max(50).optional(),
-    zipCode: Joi.string().max(20).optional(),
-    country: Joi.string().max(100).optional(),
+    code: Joi.string().min(2).max(50).optional(), // Admin-only, will be removed in hospital admin route
+    address: Joi.object({
+      street: Joi.string().optional(),
+      city: Joi.string().optional(),
+      state: Joi.string().optional(),
+      zipCode: Joi.string().optional(),
+      country: Joi.string().optional()
+    }).optional(),
     phone: Joi.string().max(20).optional(),
     email: Joi.string().email().optional(),
     website: Joi.string().uri().optional(),
-    isActive: Joi.boolean().optional()
+    description: Joi.string().optional(),
+    contactInfo: Joi.object({
+      phone: Joi.string().max(20).optional(),
+      email: Joi.string().email().optional()
+    }).optional(),
+    isActive: Joi.boolean().optional() // Admin-only, will be removed in hospital admin route
   }),
 
   // Unit creation schema

@@ -57,9 +57,9 @@ router.get('/', authenticate, authorize('ADMIN', 'HOSPITAL_ADMIN'), async (req, 
 });
 
 // @route   POST /api/v1/permissions
-// @desc    Create a new permission (Admin only)
-// @access  Private (ADMIN)
-router.post('/', authenticate, authorize('ADMIN'), async (req, res) => {
+// @desc    Create a new permission (Admin or Hospital Admin)
+// @access  Private (ADMIN, HOSPITAL_ADMIN)
+router.post('/', authenticate, authorize('ADMIN', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { name, code, description, category, resource, action, scope } = req.body;
 
@@ -135,9 +135,9 @@ router.get('/masters', authenticate, authorize('ADMIN', 'HOSPITAL_ADMIN'), async
 });
 
 // @route   POST /api/v1/permissions/masters
-// @desc    Create a new permission master (Admin only)
-// @access  Private (ADMIN)
-router.post('/masters', authenticate, authorize('ADMIN'), async (req, res) => {
+// @desc    Create a new permission master (Admin or Hospital Admin)
+// @access  Private (ADMIN, HOSPITAL_ADMIN)
+router.post('/masters', authenticate, authorize('ADMIN', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { name, code, description, role, permissions, hospitalPermissions, unitPermissions, isDefault } = req.body;
 
@@ -232,19 +232,20 @@ router.get('/users/:userId', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_AD
 router.post('/users/:userId/grant', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { userId } = req.params;
-    const { permissionCode, hospitalId, unitCode, expiresAt, notes } = req.body;
+    let { permissionCode, hospitalId, unitCode, expiresAt, notes } = req.body;
 
     const user = await User.findByPk(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    // Scope enforcement for Hospital Admins: must specify their own hospitalId; global grants are not allowed
+    // Scope enforcement for Hospital Admins: auto-fill hospitalId if missing, ensure matches their own
     if (req.user.role === 'HOSPITAL_ADMIN') {
-      const hid = parseInt(hospitalId);
-      if (!hid || hid !== req.user.hospitalId) {
+      const finalHospitalId = hospitalId ? parseInt(hospitalId) : req.user.hospitalId;
+      if (!finalHospitalId || finalHospitalId !== req.user.hospitalId) {
         return res.status(403).json({ error: 'Access denied', message: 'Hospital Admin grants must target their own hospitalId' });
       }
+      hospitalId = finalHospitalId;
     }
 
     const permissionRecord = await grantPermission(userId, permissionCode, req.userId, {

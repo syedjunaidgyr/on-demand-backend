@@ -41,25 +41,15 @@ router.get('/dashboard', async (req, res) => {
   try {
     const user = req.user;
     
-    const hospital = await Hospital.findByPk(user.hospitalId, {
-      attributes: { exclude: [] },
-      include: [
-        {
-          model: User,
-          as: 'users',
-          attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'isActive'],
-          where: { isActive: true },
-          required: false
-        },
-        {
-          model: Unit,
-          as: 'unitMasters',
-          attributes: ['id', 'unitCode', 'unitName', 'isActive'],
-          where: { isActive: true },
-          required: false
-        }
-      ]
-    });
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        error: 'No hospital assigned',
+        message: 'You must be assigned to a hospital to view the dashboard'
+      });
+    }
+    
+    // Get hospital with all details
+    const hospital = await Hospital.findByPk(user.hospitalId);
     
     if (!hospital) {
       return res.status(404).json({
@@ -67,6 +57,20 @@ router.get('/dashboard', async (req, res) => {
         message: 'Your assigned hospital does not exist'
       });
     }
+    
+    // Get users for this hospital separately
+    const users = await User.findAll({
+      where: { hospitalId: user.hospitalId },
+      attributes: ['id', 'firstName', 'lastName', 'email', 'role', 'isActive'],
+      order: [['createdAt', 'DESC']]
+    });
+    
+    // Get units for this hospital separately
+    const units = await Unit.findAll({
+      where: { hospitalId: user.hospitalId },
+      attributes: ['id', 'unitCode', 'unitName', 'isActive'],
+      order: [['unitName', 'ASC']]
+    });
     
     // Get statistics for the hospital
     const [totalJobs, activeJobs, totalAssignments, activeAssignments, totalUsers, activeUsers] = await Promise.all([
@@ -77,7 +81,8 @@ router.get('/dashboard', async (req, res) => {
           model: Job,
           as: 'job',
           where: { hospitalId: user.hospitalId },
-          attributes: []
+          attributes: [],
+          required: true
         }]
       }),
       JobAssignment.count({
@@ -86,7 +91,8 @@ router.get('/dashboard', async (req, res) => {
           model: Job,
           as: 'job',
           where: { hospitalId: user.hospitalId },
-          attributes: []
+          attributes: [],
+          required: true
         }]
       }),
       User.count({ where: { hospitalId: user.hospitalId } }),
@@ -102,13 +108,39 @@ router.get('/dashboard', async (req, res) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName']
+          attributes: ['id', 'firstName', 'lastName'],
+          required: false
         }
       ]
     });
     
+    // Convert hospital to JSON and add users/units
+    const hospitalData = hospital.toJSON();
+    hospitalData.users = users;
+    hospitalData.unitMasters = units;
+    // Add alias for frontend compatibility (frontend checks hospital.units.length)
+    hospitalData.units = units;
+    
+    // Return data structure that matches frontend expectations
     res.json({
-      hospital,
+      hospital: hospitalData,
+      // Statistics flattened for frontend compatibility
+      jobs: {
+        total: totalJobs,
+        active: activeJobs,
+        completed: totalJobs - activeJobs
+      },
+      assignments: {
+        total: totalAssignments,
+        active: activeAssignments
+      },
+      users: {
+        total: totalUsers,
+        active: activeUsers
+      },
+      units: units.length,
+      recentJobs: recentJobs,
+      // Also include nested statistics for backward compatibility
       statistics: {
         jobs: {
           total: totalJobs,
@@ -123,15 +155,15 @@ router.get('/dashboard', async (req, res) => {
           total: totalUsers,
           active: activeUsers
         },
-        units: hospital.unitMasters ? hospital.unitMasters.length : 0
-      },
-      recentJobs
+        units: units.length
+      }
     });
   } catch (error) {
     console.error('Dashboard error:', error);
     res.status(500).json({
       error: 'Failed to fetch dashboard',
-      message: error.message
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });
@@ -163,6 +195,69 @@ router.get('/hospital', async (req, res) => {
     console.error('Get hospital error:', error);
     res.status(500).json({
       error: 'Failed to fetch hospital',
+      message: error.message
+    });
+  }
+});
+
+// Update hospital details
+router.put('/hospital', validate(schemas.hospitalUpdate), async (req, res) => {
+  try {
+    const user = req.user;
+    
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        error: 'No hospital assigned',
+        message: 'You must be assigned to a hospital to update it'
+      });
+    }
+    
+    const hospital = await Hospital.findByPk(user.hospitalId);
+    if (!hospital) {
+      return res.status(404).json({
+        error: 'Hospital not found'
+      });
+    }
+    
+    // Prepare update data
+    const updateData = { ...req.body };
+    
+    // Hospital admin cannot update code or isActive (admin-only fields)
+    delete updateData.code;
+    delete updateData.isActive;
+    
+    // Handle address - merge with existing if provided (partial updates allowed)
+    if (updateData.address) {
+      const existingAddress = hospital.address || {};
+      updateData.address = {
+        ...existingAddress,
+        ...updateData.address
+      };
+    }
+    
+    // Handle contactInfo - merge with existing if provided
+    if (updateData.contactInfo) {
+      const existingContactInfo = hospital.contactInfo || {};
+      updateData.contactInfo = {
+        ...existingContactInfo,
+        ...updateData.contactInfo
+      };
+    }
+    
+    // Update hospital
+    await hospital.update(updateData);
+    
+    // Reload to get updated data
+    await hospital.reload();
+    
+    res.json({
+      message: 'Hospital updated successfully',
+      hospital
+    });
+  } catch (error) {
+    console.error('Update hospital error:', error);
+    res.status(500).json({
+      error: 'Failed to update hospital',
       message: error.message
     });
   }
@@ -701,12 +796,52 @@ router.get('/users', async (req, res) => {
 router.get('/jobs', async (req, res) => {
   try {
     const user = req.user;
-    const { page = 1, limit = 50, status, department } = req.query;
+    
+    // Debug logging
+    console.log('[Hospital Admin Jobs] User:', { id: user.id, role: user.role, hospitalId: user.hospitalId });
+    
+    if (!user.hospitalId) {
+      return res.status(400).json({
+        error: 'No hospital assigned',
+        message: 'You must be assigned to a hospital to view jobs'
+      });
+    }
+
+    const { page = 1, limit = 50, status, department, search } = req.query;
     const offset = (page - 1) * limit;
 
-    const where = { hospitalId: user.hospitalId };
-    if (status) where.status = status;
-    if (department) where.department = department;
+    // Build where clause - ensure hospitalId is always included
+    const whereConditions = [{ hospitalId: user.hospitalId }];
+    
+    // Add status filter
+    if (status) {
+      whereConditions.push({ status });
+    }
+    
+    // Add department filter
+    if (department) {
+      whereConditions.push({ department });
+    }
+    
+    // Add search functionality
+    if (search) {
+      whereConditions.push({
+        [Op.or]: [
+          { title: { [Op.like]: `%${search}%` } },
+          { description: { [Op.like]: `%${search}%` } },
+          { department: { [Op.like]: `%${search}%` } },
+          { location: { [Op.like]: `%${search}%` } }
+        ]
+      });
+    }
+
+    // Build final where clause
+    const where = whereConditions.length === 1 
+      ? whereConditions[0]  // Just hospitalId
+      : { [Op.and]: whereConditions };  // Multiple conditions
+
+    console.log('[Hospital Admin Jobs] Query params:', { page, limit, status, department, search, hospitalId: user.hospitalId });
+    console.log('[Hospital Admin Jobs] Where clause:', JSON.stringify(where, null, 2));
 
     const { count, rows: jobs } = await Job.findAndCountAll({
       where,
@@ -717,30 +852,75 @@ router.get('/jobs', async (req, res) => {
         {
           model: User,
           as: 'creator',
-          attributes: ['id', 'firstName', 'lastName', 'email']
+          attributes: ['id', 'firstName', 'lastName', 'email'],
+          required: false  // LEFT JOIN - allow jobs without creator
         },
         {
           model: JobAssignment,
           as: 'assignments',
           attributes: ['id', 'userId', 'status', [Job.sequelize.literal('`assignments`.`created_at`'), 'assignedAt']],
+          required: false,  // LEFT JOIN - allow jobs without assignments
           include: [{
             model: User,
             as: 'user',
-            attributes: ['id', 'firstName', 'lastName', 'email']
+            attributes: ['id', 'firstName', 'lastName', 'email'],
+            required: false  // LEFT JOIN - allow assignments without user
           }]
         }
       ]
     });
 
-    res.json({
-      jobs,
+    console.log('[Hospital Admin Jobs] Found jobs:', count, 'rows:', jobs.length);
+
+    // Transform jobs to include assignment status breakdown (similar to HR endpoint)
+    const transformedJobs = jobs.map(job => {
+      const jobData = job.toJSON();
+      
+      // Ensure assignments is an array (handle null/undefined)
+      const assignments = jobData.assignments || [];
+      
+      // Count assignments by status
+      const assignmentsByStatus = {
+        PENDING: assignments.filter(a => a && a.status === 'PENDING').length,
+        ACCEPTED: assignments.filter(a => a && a.status === 'ACCEPTED').length,
+        ASSIGNED: assignments.filter(a => a && a.status === 'ASSIGNED').length,
+        IN_PROGRESS: assignments.filter(a => a && a.status === 'IN_PROGRESS').length,
+        COMPLETED: assignments.filter(a => a && a.status === 'COMPLETED').length,
+        REJECTED: assignments.filter(a => a && a.status === 'REJECTED').length,
+        CANCELLED: assignments.filter(a => a && a.status === 'CANCELLED').length
+      };
+      
+      const currentAssignments = assignments.filter(assignment => 
+        assignment && ['ACCEPTED', 'ASSIGNED', 'IN_PROGRESS'].includes(assignment.status)
+      ).length;
+      
+      return {
+        ...jobData,
+        assignments, // Ensure assignments is always an array
+        currentAssignments,
+        assignmentStatus: assignmentsByStatus
+      };
+    });
+
+    const response = {
+      jobs: transformedJobs,
+      data: transformedJobs, // Alias for frontend compatibility
       pagination: {
         total: count,
         page: parseInt(page),
         limit: parseInt(limit),
-        pages: Math.ceil(count / limit)
+        pages: Math.ceil(count / limit),
+        totalPages: Math.ceil(count / limit) // Alias for frontend compatibility
       }
+    };
+
+    console.log('[Hospital Admin Jobs] Response:', {
+      jobsCount: transformedJobs.length,
+      totalCount: count,
+      pagination: response.pagination
     });
+
+    res.json(response);
   } catch (error) {
     console.error('Get jobs error:', error);
     res.status(500).json({

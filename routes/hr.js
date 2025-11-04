@@ -488,12 +488,14 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
   }
 });
 
-// Get all jobs with filters (returns ALL jobs without pagination)
+// Get all jobs with filters (supports pagination)
 router.get('/jobs', async (req, res) => {
   try {
     const { 
       sortBy = 'createdAt', 
       sortOrder = 'DESC',
+      page = 1,
+      limit = 10,
       department,
       location,
       requiredRole,
@@ -518,7 +520,15 @@ router.get('/jobs', async (req, res) => {
     if (minRate) whereClause.hourlyRate = { [Op.gte]: minRate };
     if (maxRate) whereClause.hourlyRate = { ...whereClause.hourlyRate, [Op.lte]: maxRate };
 
-    const jobs = await Job.findAll({
+    // Calculate pagination
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
+    const offset = (pageNum - 1) * limitNum;
+
+    // Get total count for pagination
+    const total = await Job.count({ where: whereClause });
+
+    const { count, rows: jobs } = await Job.findAndCountAll({
       where: whereClause,
       attributes: [
         'id', 'title', 'description', 'department', 'location', 'requiredRole', 
@@ -547,30 +557,36 @@ router.get('/jobs', async (req, res) => {
           ]
         }
       ],
-      order: [[sortBy, sortOrder]]
+      order: [[sortBy, sortOrder]],
+      limit: limitNum,
+      offset: offset
     });
 
     // Transform jobs to include assignment status breakdown
     const transformedJobs = jobs.map(job => {
       const jobData = job.toJSON();
       
+      // Ensure assignments is an array (handle null/undefined)
+      const assignments = jobData.assignments || [];
+      
       // Count assignments by status
       const assignmentsByStatus = {
-        PENDING: jobData.assignments.filter(a => a.status === 'PENDING').length,
-        ACCEPTED: jobData.assignments.filter(a => a.status === 'ACCEPTED').length,
-        ASSIGNED: jobData.assignments.filter(a => a.status === 'ASSIGNED').length,
-        IN_PROGRESS: jobData.assignments.filter(a => a.status === 'IN_PROGRESS').length,
-        COMPLETED: jobData.assignments.filter(a => a.status === 'COMPLETED').length,
-        REJECTED: jobData.assignments.filter(a => a.status === 'REJECTED').length,
-        CANCELLED: jobData.assignments.filter(a => a.status === 'CANCELLED').length
+        PENDING: assignments.filter(a => a && a.status === 'PENDING').length,
+        ACCEPTED: assignments.filter(a => a && a.status === 'ACCEPTED').length,
+        ASSIGNED: assignments.filter(a => a && a.status === 'ASSIGNED').length,
+        IN_PROGRESS: assignments.filter(a => a && a.status === 'IN_PROGRESS').length,
+        COMPLETED: assignments.filter(a => a && a.status === 'COMPLETED').length,
+        REJECTED: assignments.filter(a => a && a.status === 'REJECTED').length,
+        CANCELLED: assignments.filter(a => a && a.status === 'CANCELLED').length
       };
       
-      const currentAssignments = jobData.assignments.filter(assignment => 
-        ['ACCEPTED', 'ASSIGNED', 'IN_PROGRESS'].includes(assignment.status)
+      const currentAssignments = assignments.filter(assignment => 
+        assignment && ['ACCEPTED', 'ASSIGNED', 'IN_PROGRESS'].includes(assignment.status)
       ).length;
       
       return {
         ...jobData,
+        assignments, // Ensure assignments is always an array
         currentAssignments,
         assignmentStatus: assignmentsByStatus
       };
@@ -598,7 +614,14 @@ router.get('/jobs', async (req, res) => {
 
     res.json({
       jobs: transformedJobs,
-      total: transformedJobs.length,
+      data: transformedJobs, // Alias for frontend compatibility
+      total: total,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total: total,
+        pages: Math.ceil(total / limitNum)
+      },
       summary
     });
   } catch (error) {
@@ -769,14 +792,13 @@ router.patch('/jobs/:id/cancel', async (req, res) => {
     // Notify other accepted candidates they were not selected
     try {
       const others = await JobAssignment.findAll({
-        where: { jobId: jobId, status: 'REJECTED' },
+        where: { jobId: job.id, status: 'REJECTED' },
         include: [{ model: User, as: 'user', attributes: ['id','role'] }]
       });
-      const job = await Job.findByPk(jobId);
       const notifications = others.map(o => ({
         userId: String(o.user.id),
         userType: (o.user.role || '').toLowerCase(),
-        placeholders: { jobTitle: job?.title || '' }
+        placeholders: { jobTitle: job.title || '' }
       }));
       if (notifications.length > 0) {
         await sendNotifications('CandidateRejected_AfterSelection', notifications);
