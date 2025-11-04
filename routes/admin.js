@@ -10,16 +10,16 @@ const { Op } = require('sequelize');
 
 const router = express.Router();
 
-// Apply authentication and ADMIN authorization to all routes
+// Apply authentication to all routes
 router.use(authenticate);
-router.use(authorize('ADMIN'));
+// Note: Individual routes will specify their authorization requirements
 
 // ==========================================
 // ADMIN DASHBOARD (System-wide)
 // ==========================================
 
-// Get system dashboard with all hospitals statistics
-router.get('/dashboard', async (req, res) => {
+// Apply ADMIN-only authorization to dashboard
+router.get('/dashboard', authorize('ADMIN'), async (req, res) => {
   try {
     // Get total hospitals
     const totalHospitals = await Hospital.count();
@@ -120,7 +120,7 @@ router.get('/dashboard', async (req, res) => {
 // Hospital CRUD operations
 
 // Create new hospital (with optional logo upload)
-router.post('/hospitals', upload.single('logo'), async (req, res) => {
+router.post('/hospitals', authorize('ADMIN'), upload.single('logo'), async (req, res) => {
   try {
     // Validate non-file fields
     const { error: validationError, value } = schemas.hospitalCreation.validate(req.body, { abortEarly: false });
@@ -157,12 +157,63 @@ router.post('/hospitals', upload.single('logo'), async (req, res) => {
   }
 });
 
-// Update hospital
-router.put('/hospitals/:id', validate(schemas.hospitalUpdate), async (req, res) => {
+// Update hospital (ADMIN can update any, HOSPITAL_ADMIN can update their own)
+router.put('/hospitals/:id', authorize('ADMIN', 'HOSPITAL_ADMIN'), validate(schemas.hospitalUpdate), async (req, res) => {
   try {
     const { id } = req.params;
+    const hospitalId = parseInt(id);
+    
+    // If user is HOSPITAL_ADMIN, ensure they can only update their own hospital
+    if (req.user.role === 'HOSPITAL_ADMIN') {
+      if (req.user.hospitalId !== hospitalId) {
+        return res.status(403).json({
+          error: 'Access denied',
+          message: 'You can only update your own hospital'
+        });
+      }
+      
+      // Hospital admin cannot update code or isActive (admin-only fields)
+      const updateData = { ...req.body };
+      delete updateData.code;
+      delete updateData.isActive;
+      
+      // Handle address - merge with existing if provided (partial updates allowed)
+      const hospital = await Hospital.findByPk(hospitalId);
+      if (!hospital) {
+        return res.status(404).json({
+          error: 'Hospital not found'
+        });
+      }
+      
+      if (updateData.address) {
+        const existingAddress = hospital.address || {};
+        updateData.address = {
+          ...existingAddress,
+          ...updateData.address
+        };
+      }
+      
+      // Handle contactInfo - merge with existing if provided
+      if (updateData.contactInfo) {
+        const existingContactInfo = hospital.contactInfo || {};
+        updateData.contactInfo = {
+          ...existingContactInfo,
+          ...updateData.contactInfo
+        };
+      }
+      
+      await hospital.update(updateData);
+      await hospital.reload();
+      
+      return res.json({
+        message: 'Hospital updated successfully',
+        hospital
+      });
+    }
+    
+    // Admin can update any hospital
     const [updated] = await Hospital.update(req.body, {
-      where: { id }
+      where: { id: hospitalId }
     });
     
     if (updated === 0) {
@@ -171,7 +222,7 @@ router.put('/hospitals/:id', validate(schemas.hospitalUpdate), async (req, res) 
       });
     }
     
-    const hospital = await Hospital.findByPk(id);
+    const hospital = await Hospital.findByPk(hospitalId);
     res.json({
       message: 'Hospital updated successfully',
       hospital
@@ -186,7 +237,7 @@ router.put('/hospitals/:id', validate(schemas.hospitalUpdate), async (req, res) 
 });
 
 // Delete hospital (soft delete by setting isActive to false)
-router.delete('/hospitals/:id', async (req, res) => {
+router.delete('/hospitals/:id', authorize('ADMIN'), async (req, res) => {
   try {
     const { id } = req.params;
     const [updated] = await Hospital.update(
@@ -215,7 +266,7 @@ router.delete('/hospitals/:id', async (req, res) => {
 // Unit CRUD operations
 
 // Create new unit for a hospital
-router.post('/hospitals/:hospitalId/units', validate(schemas.unitCreation), async (req, res) => {
+router.post('/hospitals/:hospitalId/units', authorize('ADMIN'), validate(schemas.unitCreation), async (req, res) => {
   try {
     const { hospitalId } = req.params;
     
@@ -253,7 +304,7 @@ router.post('/hospitals/:hospitalId/units', validate(schemas.unitCreation), asyn
 });
 
 // Update unit
-router.put('/hospitals/:hospitalId/units/:unitCode', validate(schemas.unitUpdate), async (req, res) => {
+router.put('/hospitals/:hospitalId/units/:unitCode', authorize('ADMIN'), validate(schemas.unitUpdate), async (req, res) => {
   try {
     const { hospitalId, unitCode } = req.params;
     const [updated] = await Unit.update(req.body, {
@@ -284,7 +335,7 @@ router.put('/hospitals/:hospitalId/units/:unitCode', validate(schemas.unitUpdate
 });
 
 // Delete unit (soft delete by setting isActive to false)
-router.delete('/hospitals/:hospitalId/units/:unitCode', async (req, res) => {
+router.delete('/hospitals/:hospitalId/units/:unitCode', authorize('ADMIN'), async (req, res) => {
   try {
     const { hospitalId, unitCode } = req.params;
     const [updated] = await Unit.update(
