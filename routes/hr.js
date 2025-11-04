@@ -1425,20 +1425,20 @@ router.get('/jobs/:id/compatible-staff', async (req, res) => {
             if (!isNaN(dbMinutes) && dbMinutes > 0) {
               minutesWorked = Math.floor(dbMinutes);
             } else {
-              const ciStart = new Date(ci.checkInTime);
-              const ciEnd = new Date(ci.checkOutTime);
-              const segStart = ciStart < start ? start : ciStart;
-              const segEnd = ciEnd > end ? end : ciEnd;
-              const diffMs = segEnd - segStart;
+            const ciStart = new Date(ci.checkInTime);
+            const ciEnd = new Date(ci.checkOutTime);
+            const segStart = ciStart < start ? start : ciStart;
+            const segEnd = ciEnd > end ? end : ciEnd;
+            const diffMs = segEnd - segStart;
               if (diffMs > 0) minutesWorked = Math.floor(diffMs / 60000);
-            }
-            if (minutesWorked <= 0) continue;
+          }
+          if (minutesWorked <= 0) continue;
 
-            const hoursWorked = minutesWorked / 60;
-            const amount = Number((hoursWorked * hourlyRate).toFixed(2));
+          const hoursWorked = minutesWorked / 60;
+          const amount = Number((hoursWorked * hourlyRate).toFixed(2));
             const approvalStatus = (ci.approvalStatus || '').toString();
 
-            lines.push({
+          lines.push({
               job: {
                 id: job.id,
                 title: job.title,
@@ -1507,12 +1507,12 @@ router.get('/jobs/:id/compatible-staff', async (req, res) => {
                 checkOutLocation: ci.checkOutLocation || null
               },
               payout: {
-                minutesWorked,
-                hoursWorked,
-                hourlyRate,
-                amount
+            minutesWorked,
+            hoursWorked,
+            hourlyRate,
+            amount
               }
-            });
+          });
           }
         }
       }
