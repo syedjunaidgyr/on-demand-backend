@@ -55,6 +55,7 @@ app.use('/api/v1/admin', require('./routes/admin')); // Admin routes for hospita
 app.use('/api/v1/hospital-admin', require('./routes/hospitalAdmin')); // Hospital Admin routes (hospital-scoped)
 app.use('/api/v1/public', require('./routes/public')); // Public routes (no auth required)
 app.use('/api/v1/agency', require('./routes/agency')); // Agency routes
+app.use('/api/v1', require('./routes/checkins')); // Check-in approval routes (HR/Admin)
 
 // Health check endpoint
 app.get('/health', (req, res) => {

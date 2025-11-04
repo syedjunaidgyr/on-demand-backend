@@ -7,6 +7,7 @@ const { alignThemeColumnNames } = require('./align-theme-column-names');
 const { fixThemesAndSetDefaults } = require('./fix-themes-and-set-defaults');
 const { addHospitalAdminRole } = require('./add-hospital-admin-role');
 const { alterRequiredRole } = require('./alter-required-role');
+const { addCheckInApprovalColumns } = require('./add-checkin-approval-columns');
 
 async function main() {
   try {
@@ -27,6 +28,10 @@ async function main() {
     console.log('🔧 Populating themes and default theme for hospitals...');
     await fixThemesAndSetDefaults();
     console.log('✅ Theme setup ensured.');
+
+    console.log('🔧 Ensuring check_ins approval columns exist...');
+    await addCheckInApprovalColumns();
+    console.log('✅ check_ins approval columns ensured.');
   } catch (error) {
     console.error('❌ Database sync failed:', error);
     process.exitCode = 1;

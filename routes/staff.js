@@ -539,12 +539,12 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
       userId: req.userId
     });
 
-    // Verify assignment belongs to user and is assigned (confirmed by HR)
+    // Verify assignment belongs to user and is eligible (ASSIGNED or ACCEPTED)
     const assignment = await JobAssignment.findOne({
       where: { 
         id: jobAssignmentId, 
         userId: req.userId,
-        status: 'ASSIGNED'
+        status: ['ASSIGNED', 'ACCEPTED']
       },
       include: [
         {
@@ -628,14 +628,11 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
         userLocation: location // Keep user's GPS location if provided
       },
       status: 'CHECKED_IN',
+      // approvalStatus defaults to PENDING by model definition
       notes
     });
 
-    // Update assignment status
-    await assignment.update({ 
-      status: 'IN_PROGRESS',
-      startedAt: new Date()
-    });
+    // Do NOT update assignment status here. It will be flipped to IN_PROGRESS upon approval by HR/Admin.
 
     // Confirm to staff
     try {
@@ -659,7 +656,7 @@ router.post('/check-in', validate(schemas.checkIn), async (req, res) => {
     } catch (e) {}
 
     res.status(201).json({
-      message: 'Checked in successfully',
+      message: 'Check-in submitted',
       checkIn,
       userInfo: {
         id: user.id,
@@ -710,6 +707,19 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
       return res.status(404).json({
         error: 'Check-in not found',
         message: 'You are not currently checked in'
+      });
+    }
+
+    // Verify latest check-in is APPROVED
+    const latestCheckIn = await CheckIn.findOne({
+      where: { jobAssignmentId, userId: req.userId },
+      order: [['checkInTime', 'DESC']]
+    });
+
+    if (!latestCheckIn || latestCheckIn.approvalStatus !== 'APPROVED') {
+      return res.status(409).json({
+        error: 'Pending approval',
+        message: 'Checkout requires an approved check-in.'
       });
     }
 
@@ -822,6 +832,60 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
       error: 'Failed to check out',
       message: error.message
     });
+  }
+});
+
+// Staff-safe: get latest check-in approval status for an assignment (owned by requesting user)
+router.get('/assignments/:id/latest-checkin', async (req, res) => {
+  try {
+    const assignmentId = req.params.id;
+
+    // Ensure assignment belongs to the user
+    const assignment = await JobAssignment.findOne({
+      where: { id: assignmentId, userId: req.userId },
+      attributes: ['id', 'status']
+    });
+
+    if (!assignment) {
+      return res.status(404).json({ error: 'Not found', message: 'Assignment not found' });
+    }
+
+    const latest = await CheckIn.findOne({
+      where: { jobAssignmentId: assignmentId, userId: req.userId },
+      order: [['checkInTime', 'DESC']],
+      attributes: ['id', 'approvalStatus', 'approvedBy', 'approvedAt', 'rejectionReason']
+    });
+
+    if (!latest) {
+      // No check-in yet for this assignment by this user
+      return res.json({
+        jobAssignmentId: Number(assignmentId),
+        checkInId: null,
+        approvalStatus: 'pending',
+        approvedBy: null,
+        approvedAt: null,
+        rejectionReason: null
+      });
+    }
+
+    let normalized = typeof latest.approvalStatus === 'string'
+      ? String(latest.approvalStatus).toLowerCase()
+      : 'pending';
+    if (!['pending', 'approved', 'rejected'].includes(normalized)) {
+      normalized = 'pending';
+    }
+
+    return res.json({
+      jobAssignmentId: Number(assignmentId),
+      checkInId: latest.id,
+      approvalStatus: normalized,
+      approvedBy: latest.approvedBy || null,
+      approvedAt: latest.approvedAt || null,
+      rejectionReason: latest.rejectionReason || null
+    });
+  } catch (error) {
+    console.error('Latest check-in status error:', error);
+    res.status(500).json({ error: 'Failed to fetch check-in status', message: error.message });
   }
 });
 
