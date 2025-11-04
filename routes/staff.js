@@ -784,6 +784,30 @@ router.post('/check-out', validate(schemas.checkOut), async (req, res) => {
       actualEndTime: checkOutTime
     });
 
+    // Check if all assignments for this job are completed
+    const jobId = assignment.jobId;
+    const totalAssignments = await JobAssignment.count({
+      where: { 
+        jobId: jobId,
+        status: { [Op.ne]: 'CANCELLED' } // Count non-cancelled assignments
+      }
+    });
+    
+    const completedAssignments = await JobAssignment.count({
+      where: { 
+        jobId: jobId,
+        status: 'COMPLETED'
+      }
+    });
+
+    // If all non-cancelled assignments are completed, update job status to COMPLETED
+    if (totalAssignments > 0 && completedAssignments === totalAssignments) {
+      await Job.update(
+        { status: 'COMPLETED' },
+        { where: { id: jobId } }
+      );
+    }
+
     // Confirm to staff
     try {
       await sendNotifications('CheckOut_ConfirmUser', [{
