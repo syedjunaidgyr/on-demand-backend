@@ -524,7 +524,8 @@ router.get('/jobs', async (req, res) => {
         'id', 'title', 'description', 'department', 'location', 'requiredRole', 
         'specialization', 'startDate', 'endDate', 'startTime', 'endTime', 
         'hourlyRate', 'status', 'priority', 'maxAssignments', 'facilityName', 
-        'facilityAddress', 'createdBy', 'hospitalId', 'unitCode', 'createdAt', 'updatedAt'
+        'facilityAddress', 'contactPerson', 'requirements', 'benefits', 'notes',
+        'createdBy', 'hospitalId', 'unitCode', 'createdAt', 'updatedAt'
       ],
       include: [
         {
@@ -569,8 +570,13 @@ router.get('/jobs', async (req, res) => {
         ['ACCEPTED', 'ASSIGNED', 'IN_PROGRESS'].includes(assignment.status)
       ).length;
       
+      // Ensure contactPerson, requirements, benefits, and notes are always included (even if null)
       return {
         ...jobData,
+        contactPerson: jobData.contactPerson || null,
+        requirements: jobData.requirements || null,
+        benefits: jobData.benefits || null,
+        notes: jobData.notes || null,
         currentAssignments,
         assignmentStatus: assignmentsByStatus
       };
@@ -1332,22 +1338,34 @@ router.get('/jobs/:id/compatible-staff', async (req, res) => {
           endDate: { [Op.gte]: start },
           ...(jobId ? { id: jobId } : {})
         },
-        attributes: ['id', 'title', 'hourlyRate', 'startDate', 'endDate'],
+        attributes: [
+          'id','title','description','department','location','requiredRole','specialization',
+          'startDate','endDate','startTime','endTime','hourlyRate','status','priority','maxAssignments',
+          'facilityName','facilityAddress','hospitalId','unitCode','contactPerson','requirements','benefits','createdBy','createdAt','updatedAt'
+        ],
         include: [
           {
             model: JobAssignment,
             as: 'assignments',
-            attributes: ['id', 'userId', 'createdAt'],
+            attributes: [
+              'id','jobId','userId','agencyId','status','assignedBy','acceptedAt','confirmedAt','rejectedAt','rejectionReason',
+              'startedAt','completedAt','cancelledAt','cancellationReason','actualStartTime','actualEndTime','totalHours','hourlyRate',
+              'totalPayment','notes','rating','feedback','createdAt','updatedAt'
+            ],
             include: [
               {
                 model: User,
                 as: 'user',
-                attributes: ['id', 'firstName', 'lastName']
+                attributes: ['id','firstName','lastName','email','role','department','specialization','phone']
               },
               {
                 model: CheckIn,
                 as: 'checkIns',
-                attributes: ['id', 'checkInTime', 'checkOutTime']
+                attributes: [
+                  'id','jobAssignmentId','userId','checkInTime','checkOutTime','status','breakStartTime','breakEndTime','totalBreakTime',
+                  'totalWorkTime','isLate','lateMinutes','isEarlyCheckout','earlyCheckoutMinutes','notes','approvalStatus','approvedBy','approvedAt',
+                  'rejectionReason','checkInLocation','checkOutLocation','createdAt','updatedAt'
+                ]
               }
             ],
             ...(userId ? { where: { userId } } : {})
@@ -1360,7 +1378,12 @@ router.get('/jobs/:id/compatible-staff', async (req, res) => {
 
       for (const job of jobs) {
         for (const assignment of job.assignments || []) {
-          const validCheckIns = (assignment.checkIns || []).filter(ci => ci.checkInTime && ci.checkOutTime);
+          // Only consider check-ins that have times and (by default) are approved
+          const validCheckIns = (assignment.checkIns || []).filter(ci => {
+            if (!ci.checkInTime || !ci.checkOutTime) return false;
+            const status = String(ci.approvalStatus || '').toUpperCase();
+            return status === 'APPROVED' || status === '';
+          });
 
           // Consider only check-ins that intersect the requested range
           const inRange = validCheckIns.filter(ci => {
@@ -1371,37 +1394,104 @@ router.get('/jobs/:id/compatible-staff', async (req, res) => {
 
           if (inRange.length === 0) continue;
 
-          // Sum minutes of intersection with range
-          let minutesWorked = 0;
-          for (const ci of inRange) {
-            const ciStart = new Date(ci.checkInTime);
-            const ciEnd = new Date(ci.checkOutTime);
-            const segStart = ciStart < start ? start : ciStart;
-            const segEnd = ciEnd > end ? end : ciEnd;
-            const diffMs = segEnd - segStart;
-            if (diffMs > 0) minutesWorked += Math.floor(diffMs / 60000);
-          }
-
-          if (minutesWorked <= 0) continue;
-
-          const hoursWorked = minutesWorked / 60;
+          // Emit one payout line per check-in with rich details
           const hourlyRate = Number(job.hourlyRate) || 0;
-          const amount = Number((hoursWorked * hourlyRate).toFixed(2));
+          for (const ci of inRange) {
+            // Prefer DB column totalWorkTime; fallback to ranged duration if missing
+            let minutesWorked = 0;
+            const dbMinutes = Number(ci.totalWorkTime || 0);
+            if (!isNaN(dbMinutes) && dbMinutes > 0) {
+              minutesWorked = Math.floor(dbMinutes);
+            } else {
+              const ciStart = new Date(ci.checkInTime);
+              const ciEnd = new Date(ci.checkOutTime);
+              const segStart = ciStart < start ? start : ciStart;
+              const segEnd = ciEnd > end ? end : ciEnd;
+              const diffMs = segEnd - segStart;
+              if (diffMs > 0) minutesWorked = Math.floor(diffMs / 60000);
+            }
+            if (minutesWorked <= 0) continue;
 
-          const shiftDates = Array.from(new Set(inRange.map(ci => new Date(ci.checkInTime).toISOString().slice(0, 10))));
+            const hoursWorked = minutesWorked / 60;
+            const amount = Number((hoursWorked * hourlyRate).toFixed(2));
+            const approvalStatus = (ci.approvalStatus || '').toString();
 
-          lines.push({
-            jobId: job.id,
-            jobTitle: job.title,
-            assignmentId: assignment.id,
-            userId: assignment.user?.id,
-            staffName: assignment.user ? `${assignment.user.firstName} ${assignment.user.lastName}` : '',
-            shiftDates,
-            minutesWorked,
-            hoursWorked,
-            hourlyRate,
-            amount
-          });
+            lines.push({
+              job: {
+                id: job.id,
+                title: job.title,
+                description: job.description,
+                department: job.department,
+                location: job.location,
+                requiredRole: job.requiredRole,
+                specialization: job.specialization,
+                startDate: job.startDate,
+                endDate: job.endDate,
+                startTime: job.startTime,
+                endTime: job.endTime,
+                hourlyRate: Number(job.hourlyRate) || 0,
+                status: job.status,
+                priority: job.priority,
+                maxAssignments: job.maxAssignments,
+                facilityName: job.facilityName,
+                facilityAddress: job.facilityAddress,
+                hospitalId: job.hospitalId,
+                unitCode: job.unitCode,
+                contactPerson: job.contactPerson || null,
+                requirements: job.requirements || null,
+                benefits: job.benefits || null
+              },
+              assignment: {
+                id: assignment.id,
+                jobId: assignment.jobId,
+                userId: assignment.userId,
+                agencyId: assignment.agencyId,
+                status: assignment.status,
+                assignedBy: assignment.assignedBy,
+                acceptedAt: assignment.acceptedAt,
+                confirmedAt: assignment.confirmedAt,
+                startedAt: assignment.startedAt,
+                completedAt: assignment.completedAt,
+                hourlyRate: Number(assignment.hourlyRate || job.hourlyRate) || 0,
+                notes: assignment.notes
+              },
+              user: assignment.user ? {
+                id: assignment.user.id,
+                firstName: assignment.user.firstName,
+                lastName: assignment.user.lastName,
+                email: assignment.user.email,
+                role: assignment.user.role,
+                department: assignment.user.department,
+                specialization: assignment.user.specialization
+              } : null,
+              checkIn: {
+                id: ci.id,
+                jobAssignmentId: ci.jobAssignmentId,
+                userId: ci.userId,
+                checkInTime: ci.checkInTime,
+                checkOutTime: ci.checkOutTime,
+                status: ci.status,
+                totalWorkTime: ci.totalWorkTime,
+                isLate: ci.isLate,
+                lateMinutes: ci.lateMinutes,
+                isEarlyCheckout: ci.isEarlyCheckout,
+                earlyCheckoutMinutes: ci.earlyCheckoutMinutes,
+                notes: ci.notes,
+                approvalStatus,
+                approvedBy: ci.approvedBy || null,
+                approvedAt: ci.approvedAt || null,
+                rejectionReason: ci.rejectionReason || null,
+                checkInLocation: ci.checkInLocation || null,
+                checkOutLocation: ci.checkOutLocation || null
+              },
+              payout: {
+                minutesWorked,
+                hoursWorked,
+                hourlyRate,
+                amount
+              }
+            });
+          }
         }
       }
 
@@ -1423,7 +1513,6 @@ router.get('/jobs/:id/compatible-staff', async (req, res) => {
 
       res.json({
         period: { startDate, endDate },
-        filters: { userId: userId || null, jobId: jobId || null },
         lines,
         totals: {
           byUser: Object.values(totalsByUser),
