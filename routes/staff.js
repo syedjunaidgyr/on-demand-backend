@@ -1020,6 +1020,218 @@ router.get('/status', async (req, res) => {
   }
 });
 
+// Get my check-ins/check-outs (staff only - date range filter)
+// Returns all check-in and check-out details in one response
+router.get('/check-ins', async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { startDate, endDate, status } = req.query;
+
+    // Build where clause
+    const whereClause = {
+      userId: userId // Only logged-in user's check-ins
+    };
+
+    // Date range filter
+    if (startDate || endDate) {
+      whereClause.checkInTime = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        whereClause.checkInTime[Op.gte] = start;
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        whereClause.checkInTime[Op.lte] = end;
+      }
+    }
+
+    // Status filter (optional)
+    if (status) {
+      whereClause.status = status;
+    }
+
+    const checkIns = await CheckIn.findAll({
+      where: whereClause,
+      attributes: {
+        exclude: ['createdAt', 'updatedAt']
+      },
+      include: [
+        {
+          model: JobAssignment,
+          as: 'jobAssignment',
+          attributes: { exclude: ['createdAt', 'updatedAt'] }, // All assignment fields
+          include: [
+            {
+              model: Job,
+              as: 'job',
+              attributes: { exclude: ['createdAt', 'updatedAt'] } // All job fields
+            },
+            {
+              model: User,
+              as: 'user',
+              attributes: { exclude: ['password', 'createdAt', 'updatedAt'] } // All user fields except password
+            },
+            {
+              model: User,
+              as: 'assigner',
+              attributes: ['id', 'firstName', 'lastName', 'email']
+            }
+          ]
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: { exclude: ['password', 'createdAt', 'updatedAt'] }
+        }
+      ],
+      order: [['checkInTime', 'DESC']]
+    });
+
+    // Transform to include all details in a flat structure
+    const checkInsWithDetails = checkIns.map(checkIn => {
+      const checkInData = checkIn.toJSON();
+      const assignment = checkInData.jobAssignment || {};
+      const job = assignment.job || {};
+      const user = checkInData.user || assignment.user || {};
+      const assigner = assignment.assigner || {};
+
+      return {
+        // Check-in details
+        id: checkInData.id,
+        checkInId: checkInData.id,
+        jobAssignmentId: checkInData.jobAssignmentId,
+        userId: checkInData.userId,
+        
+        // Check-in/out times
+        checkInTime: checkInData.checkInTime,
+        checkOutTime: checkInData.checkOutTime,
+        checkInLocation: checkInData.checkInLocation,
+        checkOutLocation: checkInData.checkOutLocation,
+        
+        // Status and timing
+        status: checkInData.status,
+        approvalStatus: checkInData.approvalStatus,
+        approvedBy: checkInData.approvedBy,
+        approvedAt: checkInData.approvedAt,
+        rejectionReason: checkInData.rejectionReason,
+        
+        // Work time details
+        totalWorkTime: checkInData.totalWorkTime || 0,
+        totalBreakTime: checkInData.totalBreakTime || 0,
+        breakStartTime: checkInData.breakStartTime,
+        breakEndTime: checkInData.breakEndTime,
+        
+        // Attendance flags
+        isLate: checkInData.isLate || false,
+        lateMinutes: checkInData.lateMinutes || 0,
+        isEarlyCheckout: checkInData.isEarlyCheckout || false,
+        earlyCheckoutMinutes: checkInData.earlyCheckoutMinutes || 0,
+        
+        // Notes
+        notes: checkInData.notes,
+        supervisorNotes: checkInData.supervisorNotes,
+        
+        // Assignment details
+        assignment: {
+          id: assignment.id,
+          jobId: assignment.jobId,
+          userId: assignment.userId,
+          status: assignment.status,
+          assignedBy: assignment.assignedBy,
+          acceptedAt: assignment.acceptedAt,
+          confirmedAt: assignment.confirmedAt,
+          rejectedAt: assignment.rejectedAt,
+          rejectionReason: assignment.rejectionReason,
+          startedAt: assignment.startedAt,
+          completedAt: assignment.completedAt,
+          cancelledAt: assignment.cancelledAt,
+          cancellationReason: assignment.cancellationReason,
+          actualStartTime: assignment.actualStartTime,
+          actualEndTime: assignment.actualEndTime,
+          totalHours: assignment.totalHours,
+          hourlyRate: assignment.hourlyRate,
+          totalPayment: assignment.totalPayment,
+          notes: assignment.notes,
+          rating: assignment.rating,
+          feedback: assignment.feedback,
+          isDirectAssignment: assignment.isDirectAssignment,
+          requestForExtension: assignment.requestForExtension,
+          extensionRequestReason: assignment.extensionRequestReason,
+        },
+        
+        // Job details
+        job: {
+          id: job.id,
+          title: job.title,
+          description: job.description,
+          department: job.department,
+          location: job.location,
+          requiredRole: job.requiredRole,
+          specialization: job.specialization,
+          startDate: job.startDate,
+          endDate: job.endDate,
+          startTime: job.startTime,
+          endTime: job.endTime,
+          hourlyRate: job.hourlyRate,
+          status: job.status,
+          priority: job.priority,
+          maxAssignments: job.maxAssignments,
+          facilityName: job.facilityName,
+          facilityAddress: job.facilityAddress,
+          hospitalId: job.hospitalId,
+          unitCode: job.unitCode,
+          contactPerson: job.contactPerson,
+          requirements: job.requirements,
+          benefits: job.benefits,
+          notes: job.notes,
+        },
+        
+        // User details
+        user: {
+          id: user.id,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          department: user.department,
+          specialization: user.specialization,
+        },
+        
+        // Assigner details
+        assigner: assigner.id ? {
+          id: assigner.id,
+          firstName: assigner.firstName,
+          lastName: assigner.lastName,
+          email: assigner.email,
+        } : null,
+      };
+    });
+
+    res.json({
+      checkIns: checkInsWithDetails,
+      total: checkInsWithDetails.length,
+      summary: {
+        totalCheckIns: checkInsWithDetails.length,
+        checkedIn: checkInsWithDetails.filter(ci => ci.status === 'CHECKED_IN').length,
+        checkedOut: checkInsWithDetails.filter(ci => ci.status === 'CHECKED_OUT').length,
+        lateArrivals: checkInsWithDetails.filter(ci => ci.isLate).length,
+        earlyCheckouts: checkInsWithDetails.filter(ci => ci.isEarlyCheckout).length,
+        totalWorkTimeMinutes: checkInsWithDetails.reduce((sum, ci) => sum + (ci.totalWorkTime || 0), 0),
+        totalBreakTimeMinutes: checkInsWithDetails.reduce((sum, ci) => sum + (ci.totalBreakTime || 0), 0),
+      }
+    });
+  } catch (error) {
+    console.error('Get check-ins error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch check-ins',
+      message: error.message
+    });
+  }
+});
+
 // Request job extension
 router.post('/assignments/:id/request-extension', validate(schemas.extensionRequest), async (req, res) => {
   try {
