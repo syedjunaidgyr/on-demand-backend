@@ -6,8 +6,8 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 
 const router = express.Router();
-// List all agencies (ADMIN/HR). Optional status filter for hospital links summary.
-router.get('/list', authenticate, authorize('ADMIN', 'HR'), async (req, res) => {
+// List all agencies (ADMIN/HR/HOSPITAL_ADMIN). Optional status filter for hospital links summary.
+router.get('/list', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { includeHospitals, linkStatus } = req.query;
 
@@ -24,7 +24,9 @@ router.get('/list', authenticate, authorize('ADMIN', 'HR'), async (req, res) => 
     const links = await AgencyHospital.findAll({
       where: {
         agencyId: { [Op.in]: agencyIds },
-        ...(linkStatus ? { status: linkStatus } : {})
+        ...(linkStatus ? { status: linkStatus } : {}),
+        // Hospital Admins only see links for their own hospital
+        ...(req.user.role === 'HOSPITAL_ADMIN' ? { hospitalId: req.user.hospitalId } : {})
       },
       include: [{ model: Hospital, as: 'hospital' }]
     });
@@ -70,6 +72,42 @@ router.get('/hospitals/:hospitalId/agencies', authenticate, authorize('ADMIN', '
   } catch (error) {
     console.error('Get agencies by hospital error:', error);
     return res.status(500).json({ error: 'Failed to fetch agencies for hospital', message: error.message });
+  }
+});
+
+// List agencies NOT onboarded to a hospital (ADMIN/HR/HOSPITAL_ADMIN)
+router.get('/hospitals/:hospitalId/agencies/unlinked', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
+  try {
+    const { hospitalId } = req.params;
+
+    // Scope enforcement for Hospital Admins: can only view their own hospital
+    if (req.user.role === 'HOSPITAL_ADMIN' && req.user.hospitalId !== parseInt(hospitalId)) {
+      return res.status(403).json({ error: 'Access denied', message: 'Cannot view other hospital' });
+    }
+
+    // Find agency IDs already linked to this hospital (APPROVED links)
+    const links = await AgencyHospital.findAll({
+      where: { hospitalId, status: 'APPROVED' },
+      attributes: ['agencyId'],
+      raw: true
+    });
+    const linkedIds = new Set(links.map(l => l.agencyId));
+
+    // Fetch active agencies not in linked list
+    const agencies = await User.findAll({
+      where: {
+        role: 'AGENCY',
+        isActive: true,
+        ...(linkedIds.size > 0 ? { id: { [Op.notIn]: Array.from(linkedIds) } } : {})
+      },
+      attributes: { exclude: ['password'] },
+      order: [['createdAt', 'DESC']]
+    });
+
+    return res.json({ hospitalId, count: agencies.length, agencies });
+  } catch (error) {
+    console.error('List unlinked agencies error:', error);
+    return res.status(500).json({ error: 'Failed to list unlinked agencies', message: error.message });
   }
 });
 
@@ -376,8 +414,8 @@ router.post('/:agencyId/nurses/:nurseId/revoke', authenticate, authorize('AGENCY
   }
 });
 
-// Create an agency user (ADMIN or HR)
-router.post('/create', authenticate, authorize('ADMIN', 'HR'), validate(schemas.agencyCreate), async (req, res) => {
+// Create an agency user (ADMIN/HR/HOSPITAL_ADMIN)
+router.post('/create', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), validate(schemas.agencyCreate), async (req, res) => {
   try {
     const { email, password, name, phone, address } = req.body;
 
@@ -403,15 +441,52 @@ router.post('/create', authenticate, authorize('ADMIN', 'HR'), validate(schemas.
   }
 });
 
-// Link (onboard) agency to multiple hospitals (HR/ADMIN only)
-router.post('/:agencyId/hospitals', authenticate, authorize('ADMIN', 'HR'), validate(schemas.agencyLinkHospitals), async (req, res) => {
+// Alias: register agency (same as create) for client compatibility
+router.post('/register', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), validate(schemas.agencyCreate), async (req, res) => {
+  try {
+    const { email, password, name, phone, address } = req.body;
+
+    const existing = await User.findOne({ where: { email } });
+    if (existing) {
+      return res.status(400).json({ error: 'Agency exists', message: 'Email already in use' });
+    }
+
+    const agency = await User.create({
+      email,
+      password,
+      firstName: name,
+      lastName: 'Agency',
+      phone: phone || null,
+      role: 'AGENCY',
+      address: address || null
+    });
+
+    return res.status(201).json({ message: 'Agency created', agency: agency.toJSON() });
+  } catch (error) {
+    console.error('Register agency error:', error);
+    return res.status(500).json({ error: 'Failed to create agency', message: error.message });
+  }
+});
+
+// Link (onboard) agency to hospitals (ADMIN/HR/HOSPITAL_ADMIN)
+router.post('/:agencyId/hospitals', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), validate(schemas.agencyLinkHospitals), async (req, res) => {
   try {
     const { agencyId } = req.params;
-    const { hospitalIds } = req.body;
+    let { hospitalIds } = req.body;
 
     const agency = await User.findByPk(agencyId);
     if (!agency || agency.role !== 'AGENCY') {
       return res.status(404).json({ error: 'Not found', message: 'Agency not found' });
+    }
+
+    // Scope enforcement for Hospital Admins: can only onboard to their own hospital
+    if (req.user.role === 'HOSPITAL_ADMIN') {
+      const hid = req.user.hospitalId;
+      if (!hid) {
+        return res.status(400).json({ error: 'No hospital assigned', message: 'Hospital Admin must be assigned to a hospital' });
+      }
+      // Force hospitalIds to only include the admin's hospital
+      hospitalIds = [hid];
     }
 
     const hospitals = await Hospital.findAll({ where: { id: { [Op.in]: hospitalIds } } });
@@ -437,7 +512,30 @@ router.post('/:agencyId/hospitals', authenticate, authorize('ADMIN', 'HR'), vali
   }
 });
 
-router.get('/:agencyId/hospitals', authenticate, authorize('ADMIN', 'HR', 'AGENCY'), async (req, res) => {
+// Remove onboarding (unlink agency from hospital) (ADMIN/HR/HOSPITAL_ADMIN)
+router.delete('/:agencyId/hospitals/:hospitalId', authenticate, authorize('ADMIN', 'HR', 'HOSPITAL_ADMIN'), async (req, res) => {
+  try {
+    const { agencyId, hospitalId } = req.params;
+
+    // Scope enforcement for Hospital Admins: can only act on their own hospital
+    if (req.user.role === 'HOSPITAL_ADMIN' && req.user.hospitalId !== parseInt(hospitalId)) {
+      return res.status(403).json({ error: 'Access denied', message: 'Cannot modify other hospital' });
+    }
+
+    const link = await AgencyHospital.findOne({ where: { agencyId, hospitalId } });
+    if (!link) {
+      return res.status(404).json({ error: 'Not found', message: 'Agency-hospital link not found' });
+    }
+
+    await link.destroy();
+    return res.json({ message: 'Agency unlinked from hospital' });
+  } catch (error) {
+    console.error('Unlink agency error:', error);
+    return res.status(500).json({ error: 'Failed to unlink agency', message: error.message });
+  }
+});
+
+router.get('/:agencyId/hospitals', authenticate, authorize('ADMIN', 'HR', 'AGENCY', 'HOSPITAL_ADMIN'), async (req, res) => {
   try {
     const { agencyId } = req.params;
     if (req.user.role === 'AGENCY' && req.user.id !== parseInt(agencyId)) {
@@ -446,6 +544,8 @@ router.get('/:agencyId/hospitals', authenticate, authorize('ADMIN', 'HR', 'AGENC
     const where = { agencyId };
     // Agencies only see approved links
     if (req.user.role === 'AGENCY') where.status = 'APPROVED';
+    // Hospital Admins only see links for their own hospital
+    if (req.user.role === 'HOSPITAL_ADMIN') where.hospitalId = req.user.hospitalId;
     const linked = await AgencyHospital.findAll({ where, include: [{ model: Hospital, as: 'hospital' }] });
     return res.json({ hospitals: linked.map(r => r.hospital), links: linked });
   } catch (error) {
