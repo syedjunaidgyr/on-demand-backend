@@ -2,6 +2,7 @@ const express = require('express');
 const { Op } = require('sequelize');
 const { User, Hospital, Job, JobAssignment, AgencyHospital, AgencyNurse, AssignmentSegment, CheckIn } = require('../models');
 const { sendNotifications, formatHuman } = require('../utils/notifications');
+const { combineDateTime } = require('../utils/dateTimeHelpers');
 const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validation');
 
@@ -1053,7 +1054,7 @@ router.post('/jobs/:jobId/select-candidate', authenticate, authorize('AGENCY', '
       },
       include: [
         { model: User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'email', 'role'] },
-        { model: Job, as: 'job', attributes: ['id', 'title', 'maxAssignments', 'startDate', 'location'] }
+        { model: Job, as: 'job', attributes: ['id', 'title', 'maxAssignments', 'startDate', 'startTime', 'endDate', 'endTime', 'location'] }
       ]
     });
 
@@ -1093,6 +1094,9 @@ router.post('/jobs/:jobId/select-candidate', authenticate, authorize('AGENCY', '
       await job.save({ validate: false });
     }
 
+    const shiftStart = combineDateTime(selectedAssignment.job.startDate, selectedAssignment.job.startTime);
+    const shiftEnd = combineDateTime(selectedAssignment.job.endDate, selectedAssignment.job.endTime);
+
     // Notifications
     try {
       await sendNotifications('CandidateSelected_NotifyStaff', [{
@@ -1100,7 +1104,8 @@ router.post('/jobs/:jobId/select-candidate', authenticate, authorize('AGENCY', '
         userType: (selectedAssignment.user.role || '').toLowerCase(),
         placeholders: {
           jobTitle: selectedAssignment.job.title,
-          startDate: formatHuman(selectedAssignment.job.startDate),
+          startDate: formatHuman(shiftStart),
+          endDate: formatHuman(shiftEnd),
           location: selectedAssignment.job.location
         }
       }]);

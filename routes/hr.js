@@ -5,6 +5,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { validate, schemas, validateDepartmentSpecialization } = require('../middleware/validation');
 const { findCompatibleStaff } = require('../utils/helpers');
 const { sendNotifications, formatHuman } = require('../utils/notifications');
+const { combineDateTime } = require('../utils/dateTimeHelpers');
 
 const router = express.Router();
 
@@ -126,11 +127,21 @@ router.post('/jobs/:id/select-candidate', async (req, res) => {
 
     // Notify selected staff
     try {
-      await selectedAssignment.reload({ include: [{ model: Job, as: 'job', attributes: ['title','startDate','location'] }, { model: User, as: 'user', attributes: ['id','role','firstName','lastName'] }] });
+      await selectedAssignment.reload({
+        include: [
+          { model: Job, as: 'job', attributes: ['title', 'startDate', 'startTime', 'location'] },
+          { model: User, as: 'user', attributes: ['id', 'role', 'firstName', 'lastName'] }
+        ]
+      });
+      const shiftStart = combineDateTime(selectedAssignment.job.startDate, selectedAssignment.job.startTime);
       await sendNotifications('CandidateSelected_NotifyStaff', [{
         userId: String(selectedAssignment.user.id),
         userType: (selectedAssignment.user.role || '').toLowerCase(),
-        placeholders: { jobTitle: selectedAssignment.job.title, startDate: formatHuman(selectedAssignment.job.startDate), location: selectedAssignment.job.location }
+        placeholders: {
+          jobTitle: selectedAssignment.job.title,
+          startDate: formatHuman(shiftStart),
+          location: selectedAssignment.job.location
+        }
       }]);
     } catch (e) {}
 
@@ -341,6 +352,9 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
 
     const job = await Job.create(jobData);
 
+    const shiftStart = combineDateTime(job.startDate, job.startTime);
+    const shiftEnd = combineDateTime(job.endDate, job.endTime);
+
     // Notify creator HR
     try {
       const creator = await User.findByPk(req.userId);
@@ -348,7 +362,13 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
         await sendNotifications('JobCreated_Creator', [{
           userId: String(creator.id),
           userType: (creator.role || 'hr').toLowerCase(),
-          placeholders: { jobTitle: job.title, department: job.department, location: job.location, startDate: formatHuman(job.startDate) }
+          placeholders: {
+            jobTitle: job.title,
+            department: job.department,
+            location: job.location,
+            startDate: formatHuman(shiftStart),
+            endDate: formatHuman(shiftEnd)
+          }
         }]);
       }
     } catch (e) {}
@@ -441,7 +461,13 @@ router.post('/jobs', validate(schemas.jobCreation), async (req, res) => {
         const notifications = compatibleStaff.map(staff => ({
           userId: String(staff.id),
           userType: job.requiredRole === 'AGENCY' ? 'agency' : (staff.role || (job.requiredRole || '')).toLowerCase(),
-          placeholders: { jobTitle: job.title, department: job.department, location: job.location, startDate: formatHuman(job.startDate) }
+          placeholders: {
+            jobTitle: job.title,
+            department: job.department,
+            location: job.location,
+            startDate: formatHuman(shiftStart),
+            endDate: formatHuman(shiftEnd)
+          }
         }));
         if (job.requiredRole === 'DOCTOR') {
           await sendNotifications('JobCreated_Doctor', notifications);
@@ -867,6 +893,8 @@ router.post('/jobs/:id/assign', validate(schemas.jobAssignment), async (req, res
         message: 'Job does not exist'
       });
     }
+    const shiftStart = combineDateTime(job.startDate, job.startTime);
+    const shiftEnd = combineDateTime(job.endDate, job.endTime);
 
     // Check if user exists and has correct role
     const user = await User.findByPk(userId);
@@ -961,7 +989,12 @@ router.post('/jobs/:id/assign', validate(schemas.jobAssignment), async (req, res
       await sendNotifications('JobAssigned_AssignedUser', [{
         userId: String(user.id),
         userType: (user.role || '').toLowerCase(),
-        placeholders: { jobTitle: job.title, startDate: formatHuman(job.startDate), location: job.location }
+        placeholders: {
+          jobTitle: job.title,
+          startDate: formatHuman(shiftStart),
+          endDate: formatHuman(shiftEnd),
+          location: job.location
+        }
       }]);
     } catch (e) {}
 

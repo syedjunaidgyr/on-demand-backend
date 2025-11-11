@@ -1,5 +1,5 @@
 const axios = require('axios');
-const moment = require('moment');
+const moment = require('moment-timezone');
 
 // Map template names used in code to template IDs from the notification service
 const TEMPLATE_IDS = {
@@ -64,7 +64,7 @@ async function sendNotifications(templateName, notificationsPayload) {
 
 function formatHuman(dateLike) {
   if (!dateLike) return '';
-  const m = moment(dateLike);
+  const m = moment.tz(dateLike, 'Asia/Kolkata');
   if (!m.isValid()) return String(dateLike);
   return m.format('DD MMM YYYY, hh:mm A');
 }
